@@ -19,8 +19,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 class Sightline_Forms {
 
 	public static function init() {
-		// Contact Form 7.
+		// Contact Form 7. CF7 fires exactly one of these per valid submission.
+		// Hook both: a failed notification email doesn't mean the visitor
+		// didn't convert, so the conversion must still be recorded.
 		add_action( 'wpcf7_mail_sent', array( __CLASS__, 'on_cf7' ) );
+		add_action( 'wpcf7_mail_failed', array( __CLASS__, 'on_cf7' ) );
 		// Gravity Forms.
 		add_action( 'gform_after_submission', array( __CLASS__, 'on_gforms' ), 10, 2 );
 		// WPForms.

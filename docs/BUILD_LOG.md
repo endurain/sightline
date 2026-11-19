@@ -10,13 +10,13 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 0 | Scaffold, schema, seeder | Done | Yes — seeded 2,000 visitors / 4,165 touches / 428 conversions |
 | 1 | Client-side capture (framework-agnostic JS) | Done | Yes — getTouches() showed 2 touches, first preserved, dedupe ok |
 | 2 | REST ingestion endpoint + sink pattern | Done | Yes — POST /collect returned 200, `{"ok":true,"visitor_id":2002,"inserted":1}` |
-| 3 | Forms + identity resolution + iframe attribution | Pass 1 built (forms/identity); pass 2 (iframe) pending | Pass 1 awaiting test |
+| 3 | Forms + identity resolution + iframe attribution | Pass 1 done (forms/identity); pass 2 (iframe) pending | Pass 1 yes — CF7 + WPForms verified 2026-11-19; Gravity Forms not tested |
 | 4 | Reporting backend (incl. traffic/drop-off) | Not started | — |
 | 5 | Admin dashboard (Sankey + traffic view) | Not started | — |
 | 6 | Privacy, settings, retention, deletion | Not started | — |
 | 7 | Hosted dashboard / SaaS | Parked | — |
 
-## Current version: 0.4.0
+## Current version: 0.4.1
 
 ## Decisions log
 
@@ -42,6 +42,9 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 - **Code protection.** Client plugin is GPL/copyable by nature; the moat is the
   server-side logic + hosted service + data, not the plugin code.
 - **Endpoint protection.** REST nonce + light per-IP rate limit.
+- **CF7 conversion = valid submission, not delivered email.** Conversions are
+  recorded on both `wpcf7_mail_sent` and `wpcf7_mail_failed` (CF7 fires exactly
+  one). A broken mail setup on the host must not erase attribution. (0.4.1)
 
 ## Issues log
 
@@ -51,6 +54,8 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 2 | Full-page caches can serve a stale REST nonce to anonymous visitors | Open — Phase 6, switch to a cache-friendly token |
 | 3 | anon_id hidden field injected at load only; forms added later (popups/AJAX) miss it | Open — Phase 3 pass 2 or later, add MutationObserver |
 | 4 | Cross-device identity: same hashed_email on two anon_ids = two visitor rows | Open — stitch at reporting (Phase 4) or a later merge |
+| 5 | CF7 conversions only hook `wpcf7_mail_sent`; if the notification email fails (`mail_failed`), the conversion is silently dropped (reproduced 2026-11-19) | Resolved in 0.4.1 — `Sightline_Forms` now also hooks `wpcf7_mail_failed`; verified a forced mail failure records the conversion |
+| 6 | Current CF7 (6.2+) requires PHP 8.3; Local test site runs PHP 8.2, so testing used CF7 6.1.4 | Note — bump site PHP to test against current CF7 |
 
 ## Test environment
 
@@ -88,25 +93,25 @@ running the Phase 3 checklist, then continue with Phase 3 pass 2 (iframe).
 - [x] A real browser visit creates a NEW visitor row (id > 2000) and touch rows.
 - [x] Server dedupes identical consecutive touches.
 
-### Phase 3 pass 1 — forms + identity  — NOT YET TESTED (do this first)
-- [ ] After reinstall, a page with a CF7 form contains a hidden
+### Phase 3 pass 1 — forms + identity  — VERIFIED 2026-11-19 (CF7 6.1.4, WPForms Lite 2.0.5.1, headless Chrome)
+- [x] After reinstall, a page with a CF7 form contains a hidden
       `<input name="sl_anon_id" value="<uuid>">` (injected by capture.js).
-- [ ] Submitting the form inserts a row in `_sl_conversions` with
+- [x] Submitting the form inserts a row in `_sl_conversions` with
       `form_type = 'cf7'` and a valid `visitor_id`.
-- [ ] That visitor row now has a 64-char `hashed_email`.
-- [ ] **PRIVACY CHECK:** search the ENTIRE database for the email you submitted.
+- [x] That visitor row now has a 64-char `hashed_email`.
+- [x] **PRIVACY CHECK:** search the ENTIRE database for the email you submitted.
       It must NOT appear in any Sightline table. (It may appear in the form
       plugin's own tables — that's the form plugin, not Sightline.)
-- [ ] Re-submitting with a different email on the same browser does NOT overwrite
+- [x] Re-submitting with a different email on the same browser does NOT overwrite
       the existing `hashed_email` (first identity wins).
-- [ ] Repeat for Gravity Forms (`form_type = 'gravityforms'`) if available.
-- [ ] Repeat for WPForms (`form_type = 'wpforms'`) if available.
-- [ ] Submit with JS disabled / no `sl_anon_id`: handler bails cleanly, no PHP error.
+- [ ] Repeat for Gravity Forms (`form_type = 'gravityforms'`) if available. *(Not tested — paid plugin, not installed.)*
+- [x] Repeat for WPForms (`form_type = 'wpforms'`) if available.
+- [x] Submit with JS disabled / no `sl_anon_id`: handler bails cleanly, no PHP error.
 
 ### Cross-cutting checks
-- [ ] No PHP notices/warnings with `WP_DEBUG` on during any of the above.
-- [ ] Deactivate + reactivate keeps data intact (no teardown until Phase 6).
-- [ ] Confirm `capture.js` loads with `?ver=0.4.0` (bust browser cache after reinstall).
+- [x] No PHP notices/warnings with `WP_DEBUG` on during any of the above.
+- [x] Deactivate + reactivate keeps data intact (no teardown until Phase 6).
+- [x] Confirm `capture.js` loads with `?ver=0.4.0` (bust browser cache after reinstall).
 
 ## Known gaps / next work
 - **Phase 3 pass 2 (NOT built):** iframe attribution — admin toggle, domain

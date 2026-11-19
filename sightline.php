@@ -3,7 +3,7 @@
  * Plugin Name:       Sightline
  * Plugin URI:        https://example.com/sightline
  * Description:       Privacy-first multi-touch attribution. Captures UTM/ad-click touches, stores them first-party, and visualizes the path to conversion. (Phase 3: forms + identity resolution.)
- * Version:           0.4.0
+ * Version:           0.4.1
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Zac Sanders
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SIGHTLINE_VERSION', '0.4.0' );
+define( 'SIGHTLINE_VERSION', '0.4.1' );
 define( 'SIGHTLINE_DB_VERSION', '1' );
 define( 'SIGHTLINE_FILE', __FILE__ );
 define( 'SIGHTLINE_DIR', plugin_dir_path( __FILE__ ) );
