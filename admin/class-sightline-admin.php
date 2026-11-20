@@ -1,7 +1,7 @@
 <?php
 /**
- * Admin screen for Phase 0: shows table counts, pepper status, and the
- * seed / clear demo-data controls.
+ * Admin screen: table counts, pepper status, iframe form attribution settings,
+ * and the seed / clear demo-data controls.
  *
  * @package Sightline
  */
@@ -16,6 +16,7 @@ class Sightline_Admin {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
 		add_action( 'admin_post_sightline_seed', array( __CLASS__, 'handle_seed' ) );
 		add_action( 'admin_post_sightline_clear', array( __CLASS__, 'handle_clear' ) );
+		add_action( 'admin_post_sightline_save_iframe', array( __CLASS__, 'handle_save_iframe' ) );
 	}
 
 	public static function menu() {
@@ -61,10 +62,15 @@ class Sightline_Admin {
 		if ( isset( $_GET['cleared'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			echo '<div class="notice notice-success is-dismissible"><p>Sightline data cleared.</p></div>';
 		}
+		if ( isset( $_GET['iframe_saved'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
+			echo '<div class="notice notice-success is-dismissible"><p>Iframe form attribution settings saved.</p></div>';
+		}
+		$iframe_on      = Sightline_Iframe::enabled();
+		$iframe_domains = Sightline_Iframe::domains();
 		?>
 		<div class="wrap">
 			<h1>Sightline</h1>
-			<p><em>Phase 0 — scaffold, schema, and demo data.</em></p>
+			<p><em>Phase 3 — capture, ingestion, forms, and iframe attribution.</em></p>
 
 			<h2>Database</h2>
 			<table class="widefat striped" style="max-width:420px">
@@ -86,6 +92,56 @@ class Sightline_Admin {
 					&mdash; not set yet.
 				<?php endif; ?>
 			</p>
+
+			<h2>Iframe form attribution</h2>
+			<p style="max-width:640px">
+				For CRM forms embedded as an iframe (Pardot, HubSpot share links), Sightline
+				can't reach inside the form, but it can add first- and last-touch UTMs to the
+				iframe's URL before it loads. Only iframes on the domains below are changed.
+			</p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="sightline_save_iframe">
+				<?php wp_nonce_field( 'sightline_save_iframe' ); ?>
+				<table class="form-table" role="presentation">
+					<tr>
+						<th scope="row">Enable iframe form attribution</th>
+						<td>
+							<label>
+								<input type="checkbox" name="sightline_iframe_enabled" value="1" <?php checked( $iframe_on ); ?>>
+								Add attribution to allowlisted form iframes
+							</label>
+						</td>
+					</tr>
+					<tr>
+						<th scope="row"><label for="sightline_iframe_domains">Form domain allowlist</label></th>
+						<td>
+							<textarea id="sightline_iframe_domains" name="sightline_iframe_domains" rows="5" cols="40" class="code"><?php echo esc_textarea( implode( "\n", $iframe_domains ) ); ?></textarea>
+							<p class="description">
+								One domain per line. Subdomains match too. Add your Pardot
+								custom tracker domain (for example <code>go.yourcompany.com</code>).
+							</p>
+						</td>
+					</tr>
+				</table>
+				<?php submit_button( 'Save iframe settings' ); ?>
+			</form>
+
+			<h3>Setup checklist (required for the data to land)</h3>
+			<ol style="max-width:640px">
+				<li>Create the CRM fields from the User Guide: <code>sl_first_utm_source</code>,
+					<code>sl_first_utm_medium</code>, <code>sl_first_utm_campaign</code>,
+					<code>sl_last_utm_source</code>, <code>sl_last_utm_medium</code>,
+					<code>sl_last_utm_campaign</code>.</li>
+				<li>Add them to the embedded form as hidden fields.</li>
+				<li><strong>Pardot:</strong> set each hidden field to prefill from the URL
+					(the URL parameter must match the field name above). If this isn't set,
+					the values arrive in the iframe URL but are silently ignored.</li>
+				<li><strong>HubSpot share links:</strong> use the property internal names above;
+					HubSpot prefills hidden fields from matching URL parameters.</li>
+				<li>Add the form's domain to the allowlist, enable the toggle, then load a page
+					with <code>?utm_source=test</code> and confirm the iframe URL carries
+					<code>sl_first_utm_source=test</code> (browser devtools &rarr; Elements).</li>
+			</ol>
 
 			<h2>Demo data</h2>
 			<p style="max-width:640px">
@@ -120,6 +176,30 @@ class Sightline_Admin {
 				array(
 					'page'   => 'sightline',
 					'seeded' => $created,
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
+	}
+
+	public static function handle_save_iframe() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( 'Insufficient permissions.' );
+		}
+		check_admin_referer( 'sightline_save_iframe' );
+
+		$enabled = ! empty( $_POST['sightline_iframe_enabled'] );
+		$raw     = isset( $_POST['sightline_iframe_domains'] ) ? sanitize_textarea_field( wp_unslash( $_POST['sightline_iframe_domains'] ) ) : '';
+
+		update_option( Sightline_Iframe::OPT_ENABLED, $enabled ? 1 : 0 );
+		update_option( Sightline_Iframe::OPT_DOMAINS, Sightline_Iframe::sanitize_domains( $raw ) );
+
+		wp_safe_redirect(
+			add_query_arg(
+				array(
+					'page'         => 'sightline',
+					'iframe_saved' => 1,
 				),
 				admin_url( 'admin.php' )
 			)

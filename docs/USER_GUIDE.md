@@ -52,13 +52,35 @@ only if you want CRM pass-through.
 
 ## Forms with embedded (iframe) CRM forms
 
-If your form is an embedded Pardot/HubSpot iframe, turn on **Enable iframe form
-attribution** in Sightline settings. Then:
+If your form is an embedded Pardot/HubSpot iframe, open the **Sightline** admin
+page and turn on **Enable iframe form attribution**. Then:
 
-- Add your CRM form domain to the allowlist (e.g. your Pardot `go.` domain).
-- Make sure the CRM form fields above are set to **prefill from the URL / query
-  string** (Pardot) so the passed values land. Sightline gets the data to the form;
-  the form has to be set to receive it.
+- Check the **form domain allowlist**. It starts with `go.pardot.com`,
+  `pi.pardot.com`, `share.hsforms.com` and `share-eu1.hsforms.com`. Add your Pardot
+  custom tracker domain (e.g. `go.yourcompany.com`). Subdomains match too. Only
+  iframes on these domains are ever changed; YouTube, maps etc. are left alone.
+- Add the six **minimal** fields above to the embedded form as hidden fields, and
+  set them to **prefill from the URL / query string** (Pardot). Sightline puts the
+  values in the iframe's URL; the form has to be set to read them, or they're
+  silently ignored.
+- Only first and last touch source / medium / campaign are passed to iframes (URL
+  length limits). The fuller fields work on native WordPress forms only.
+- Test: open a page with the form using `?utm_source=test`, inspect the iframe in
+  your browser's devtools, and confirm its URL contains `sl_first_utm_source=test`.
+
+Visitors without JavaScript, or with an ad blocker that blocks Sightline, still see
+the form; it just loads without attribution.
+
+## Native WordPress forms (CRM pass-through)
+
+To pass attribution through a native form (e.g. Contact Form 7 posting to Pardot or
+HubSpot), add hidden fields with the CRM field names, e.g. in Contact Form 7:
+
+    [hidden sl_first_utm_source]
+    [hidden sl_last_utm_source]
+    [hidden sl_last_utm_campaign]
+
+Sightline fills them automatically, including in forms that appear later (popups).
 
 ## Privacy
 

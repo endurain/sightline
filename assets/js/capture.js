@@ -11,8 +11,11 @@
  *   - reads UTMs + ad click ids + referrer from the current URL
  *   - appends a "touch" to a first-party touch list (localStorage, cookie fallback)
  *   - preserves first touch (list is append-only) and dedupes refreshes
+ *   - adds a hidden sl_anon_id field to every form (including forms added later)
+ *   - fills any existing sl_first_* / sl_last_* CRM fields with attribution
+ *   - fires a `sightline:ready` event on document when done
  *
- * Inspect in devtools:  window.Sightline.getTouches()  /  .getAnonId()
+ * Inspect in devtools:  window.Sightline.getTouches()  /  .getAnonId()  /  .getAttribution()
  */
 (function (window, document) {
 	'use strict';
@@ -198,21 +201,81 @@
 		return (now - lastTime) < cfg.dedupeMinutes * 60000;
 	}
 
-	/* ---- Hidden-field injection for native forms ---- */
-	// Adds a hidden sl_anon_id input to every form so the server can tie a
-	// submission back to this visitor. Idempotent. (Dynamically-added forms,
-	// e.g. in popups loaded later, are a known pass-two refinement.)
-	function injectAnonField(anonId) {
-		var forms = document.getElementsByTagName('form');
-		for (var i = 0; i < forms.length; i++) {
-			if (!forms[i].querySelector('input[name="sl_anon_id"]')) {
-				var input = document.createElement('input');
-				input.type = 'hidden';
-				input.name = 'sl_anon_id';
-				input.value = anonId;
-				forms[i].appendChild(input);
+	/* ---- Attribution summary (first/last touch) ---- */
+	// Keys match the CRM fields documented in the user guide.
+	var UTM_PARTS = ['source', 'medium', 'campaign', 'term', 'content'];
+
+	function getAttribution() {
+		var list = getTouches();
+		var out = {};
+		if (!list.length) { return out; }
+		var first = list[0], last = list[list.length - 1];
+		UTM_PARTS.forEach(function (p) {
+			if (first['utm_' + p]) { out['sl_first_utm_' + p] = first['utm_' + p]; }
+			if (last['utm_' + p]) { out['sl_last_utm_' + p] = last['utm_' + p]; }
+		});
+		if (first.landing_url) { out.sl_first_landing = first.landing_url; }
+		if (last.referrer) { out.sl_last_referrer = last.referrer; }
+		out.sl_touch_count = String(list.length);
+		return out;
+	}
+
+	/**
+	 * Fill any existing fields named like the CRM keys (sl_first_utm_source, ...)
+	 * inside `scope`. Never creates fields and never overwrites a non-empty value.
+	 */
+	function fillFields(scope) {
+		scope = scope || document;
+		var attr = getAttribution();
+		var k, i, els, el, ev;
+		for (k in attr) {
+			if (!has(attr, k)) { continue; }
+			els = scope.querySelectorAll('input[name="' + k + '"], textarea[name="' + k + '"]');
+			for (i = 0; i < els.length; i++) {
+				el = els[i];
+				if (el.value) { continue; }
+				el.value = attr[k];
+				// Let form libraries that track their own state notice the change.
+				try {
+					ev = document.createEvent('HTMLEvents');
+					ev.initEvent('input', true, false); el.dispatchEvent(ev);
+					ev = document.createEvent('HTMLEvents');
+					ev.initEvent('change', true, false); el.dispatchEvent(ev);
+				} catch (e) {}
 			}
 		}
+	}
+
+	/* ---- Hidden-field injection for native forms ---- */
+	// Adds a hidden sl_anon_id input to a form so the server can tie a
+	// submission back to this visitor. Idempotent.
+	function prepareForm(form, anonId) {
+		if (!form.querySelector('input[name="sl_anon_id"]')) {
+			var input = document.createElement('input');
+			input.type = 'hidden';
+			input.name = 'sl_anon_id';
+			input.value = anonId;
+			form.appendChild(input);
+		}
+		fillFields(form);
+	}
+
+	function prepareForms(scope, anonId) {
+		var forms = scope.tagName === 'FORM' ? [scope] : scope.getElementsByTagName('form');
+		for (var i = 0; i < forms.length; i++) { prepareForm(forms[i], anonId); }
+	}
+
+	// Forms added after load (popups, AJAX-rendered embeds) get the same treatment.
+	function watchForms(anonId) {
+		if (!window.MutationObserver) { return; }
+		new window.MutationObserver(function (mutations) {
+			for (var m = 0; m < mutations.length; m++) {
+				var added = mutations[m].addedNodes;
+				for (var i = 0; i < added.length; i++) {
+					if (added[i].nodeType === 1) { prepareForms(added[i], anonId); }
+				}
+			}
+		}).observe(document.documentElement, { childList: true, subtree: true });
 	}
 
 	/* ---- Main ---- */
@@ -238,8 +301,9 @@
 			}
 		}
 
-		// Tie form submissions back to this visitor.
-		injectAnonField(anonId);
+		// Tie form submissions back to this visitor, and fill CRM fields.
+		prepareForms(document, anonId);
+		watchForms(anonId);
 
 		// Deliver any unsent touches to the server (no-op without an endpoint).
 		sync(anonId);
@@ -249,6 +313,8 @@
 		window.Sightline.getAnonId = getAnonId;
 		window.Sightline.getTouches = getTouches;
 		window.Sightline.getSentCount = getSentCount;
+		window.Sightline.getAttribution = getAttribution;
+		window.Sightline.fillFields = fillFields;
 		window.Sightline.sync = function () { sync(getAnonId()); };
 		window.Sightline.config = cfg;
 		window.Sightline.reset = function () {
@@ -260,6 +326,13 @@
 			setCookie(cfg.sentKey, '', -1);
 			setCookie(cfg.cookieName, '', -1);
 		};
+
+		// Let add-ons (e.g. iframe attribution) know the API is ready.
+		try {
+			var ready = document.createEvent('Event');
+			ready.initEvent('sightline:ready', false, false);
+			document.dispatchEvent(ready);
+		} catch (e) {}
 	}
 
 	if (document.readyState === 'loading') {

@@ -17,6 +17,25 @@ Sink (Sightline_Sink)                          <- destination-agnostic
 The controller never touches the DB. Everything destination-specific lives behind
 the sink. Keep it that way.
 
+### Forms and iframe attribution (Phase 3)
+
+```
+capture.js            sl_anon_id hidden field + fills existing sl_* CRM fields
+                      (MutationObserver covers forms added later); fires
+                      `sightline:ready`; exposes Sightline.getAttribution()/fillFields()
+class-sightline-forms CF7 / Gravity / WPForms submit hooks -> hash email -> sink
+                      (CF7: both wpcf7_mail_sent and wpcf7_mail_failed)
+
+Iframe attribution (toggle: sightline_iframe_enabled, allowlist: sightline_iframe_domains)
+class-sightline-iframe  output buffer: allowlisted <iframe src> -> data-sl-src +
+                        data-sl-pending, + <noscript> copy, + inline 2.5s fail-safe
+iframe-attribution.js   appends sl_first/last_utm_source|medium|campaign, sets src;
+                        rewrites late-added iframes; HubSpot onFormReady -> fillFields
+```
+
+Never put attribution into server-rendered HTML: it would be cached and served to
+other visitors. The server only defers; the browser fills.
+
 ## Data model
 
 - `sl_visitors` — `id`, `anon_id` (unique), `hashed_email` (null until convert),
@@ -39,7 +58,8 @@ hashed email is written to that visitor row, merging their history. Phase 3.
 
 ## Capture script rules
 
-- No WordPress references in `capture.js` (CI check: grep must be empty).
+- No WordPress references in `capture.js` or `iframe-attribution.js` (code only;
+  the explanatory header comment in `capture.js` mentions WordPress by name).
 - Config comes in via `window.SightlineConfig` (endpoint, nonce, debug), injected
   with `wp_localize_script`. Defaults make it run with no config at all.
 - Transport is a no-op when `cfg.endpoint` is absent.
@@ -58,11 +78,14 @@ includes/
   class-sightline-db-sink.php         local-DB sink (+ dedupe)
   class-sightline-sinks.php           sink resolver (filter)
   class-sightline-rest.php            /collect endpoint
+  class-sightline-forms.php           form hooks + identity resolution
+  class-sightline-iframe.php          iframe deferral (output buffer) + settings helpers
   class-sightline-cli.php             wp sightline seed|clear
 admin/
-  class-sightline-admin.php           Phase 0 admin page
+  class-sightline-admin.php           admin page (counts, pepper, iframe settings, demo data)
 assets/js/
-  capture.js                          framework-agnostic capture
+  capture.js                          framework-agnostic capture + form prep
+  iframe-attribution.js               framework-agnostic iframe src rewrite + HubSpot fill
 docs/                                 this folder
 ```
 

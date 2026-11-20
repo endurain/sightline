@@ -10,13 +10,13 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 0 | Scaffold, schema, seeder | Done | Yes — seeded 2,000 visitors / 4,165 touches / 428 conversions |
 | 1 | Client-side capture (framework-agnostic JS) | Done | Yes — getTouches() showed 2 touches, first preserved, dedupe ok |
 | 2 | REST ingestion endpoint + sink pattern | Done | Yes — POST /collect returned 200, `{"ok":true,"visitor_id":2002,"inserted":1}` |
-| 3 | Forms + identity resolution + iframe attribution | Pass 1 done (forms/identity); pass 2 (iframe) pending | Pass 1 yes — CF7 + WPForms verified 2026-11-19; Gravity Forms not tested |
+| 3 | Forms + identity resolution + iframe attribution | Done (pass 1 forms/identity, pass 2 iframe attribution) | Yes — pass 1: CF7 + WPForms; pass 2: 14/14 headless-Chrome checks with stubbed Pardot/HubSpot (2026-11-19). Not yet tried against a live Pardot/HubSpot account; Gravity Forms not tested |
 | 4 | Reporting backend (incl. traffic/drop-off) | Not started | — |
 | 5 | Admin dashboard (Sankey + traffic view) | Not started | — |
 | 6 | Privacy, settings, retention, deletion | Not started | — |
 | 7 | Hosted dashboard / SaaS | Parked | — |
 
-## Current version: 0.4.1
+## Current version: 0.5.0
 
 ## Decisions log
 
@@ -45,6 +45,30 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 - **CF7 conversion = valid submission, not delivered email.** Conversions are
   recorded on both `wpcf7_mail_sent` and `wpcf7_mail_failed` (CF7 fires exactly
   one). A broken mail setup on the host must not erase attribution. (0.4.1)
+- **Iframe attribution = server defers, browser fills.** (0.5.0) An output buffer
+  rewrites allowlisted iframes from `src` to `data-sl-src` + `data-sl-pending`;
+  `iframe-attribution.js` adds params and sets `src`, so the iframe loads once.
+  The server never injects attribution itself: touches live in the browser, and
+  server-side values would leak between visitors through full-page caches (the
+  deferred HTML is identical for everyone, so it caches safely).
+- **Iframes must never stay blank.** No JS: a `<noscript>` copy (id stripped)
+  loads and a noscript style hides the deferred one. JS blocked or broken: an
+  inline fail-safe releases pending iframes with the original `src` after 2.5s;
+  `iframe-attribution.js` also releases them itself if `capture.js` never loads.
+- **What goes in the iframe URL:** first + last `utm_source/medium/campaign`
+  only (`sl_first_*`, `sl_last_*`), for URL length limits. Existing params are
+  never overwritten. Native forms get the fuller set filled into any existing
+  `sl_*` fields (term, content, `sl_first_landing`, `sl_last_referrer`,
+  `sl_touch_count`). Sightline fills fields that exist; it never creates them.
+- **Allowlist matching:** exact host or a true subdomain (`go.pardot.com` matches
+  `x.go.pardot.com`, not `go.pardot.com.evil.test`). Defaults: `go.pardot.com`,
+  `pi.pardot.com`, `share.hsforms.com`, `share-eu1.hsforms.com`. Toggle off by default.
+- **HubSpot postMessage:** on `hsFormCallback` / `onFormReady`, fill `sl_*` fields
+  in any same-origin iframe (HubSpot's script-built embed) and in the page itself
+  (raw embed). Cross-origin iframes are skipped; share links use the `src` rewrite.
+- **Late-loading iframes and forms:** a MutationObserver handles iframes and forms
+  added after load. A late allowlisted iframe that already has a `src` may load
+  twice (once bare, once with params); only server-deferred iframes avoid that.
 
 ## Issues log
 
@@ -52,15 +76,22 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 |---|-------|--------|
 | 1 | Chrome blocks console paste (self-XSS guard) during testing | Resolved — use Application > Storage panel, or type `allow pasting` |
 | 2 | Full-page caches can serve a stale REST nonce to anonymous visitors | Open — Phase 6, switch to a cache-friendly token |
-| 3 | anon_id hidden field injected at load only; forms added later (popups/AJAX) miss it | Open — Phase 3 pass 2 or later, add MutationObserver |
+| 3 | anon_id hidden field injected at load only; forms added later (popups/AJAX) miss it | Resolved in 0.5.0 — `capture.js` MutationObserver prepares forms added after load (verified) |
 | 4 | Cross-device identity: same hashed_email on two anon_ids = two visitor rows | Open — stitch at reporting (Phase 4) or a later merge |
 | 5 | CF7 conversions only hook `wpcf7_mail_sent`; if the notification email fails (`mail_failed`), the conversion is silently dropped (reproduced 2026-11-19) | Resolved in 0.4.1 — `Sightline_Forms` now also hooks `wpcf7_mail_failed`; verified a forced mail failure records the conversion |
 | 6 | Current CF7 (6.2+) requires PHP 8.3; Local test site runs PHP 8.2, so testing used CF7 6.1.4 | Note — bump site PHP to test against current CF7 |
+| 7 | Pass 1 never filled the `sl_first_*` / `sl_last_*` CRM fields the user guide promised; only `sl_anon_id` was injected | Resolved in 0.5.0 — `capture.js` `fillFields()` fills existing fields (verified on CF7 `[hidden]` fields) |
+| 8 | Iframe attribution only tested against stubbed Pardot/HubSpot responses | Open — verify with a real Pardot form (prefill from URL) and a HubSpot share link / embed before shipping |
+| 9 | Iframes outside the main HTML response (added by page-builder JS) aren't deferred, so they may load twice | Known limit — documented; acceptable |
 
 ## Test environment
 
-- Local WordPress (Local by WP Engine), Contact Form 7 for form testing.
-- DB inspection via TablePlus / Adminer.
+- Local WordPress (Local by WP Engine), PHP 8.2. Contact Form 7 6.1.4 and
+  WPForms Lite for form testing. Test pages: `/sightline-form-test/`,
+  `/sightline-wpforms-test/`, `/sightline-iframe-test/`.
+- DB inspection via TablePlus / Adminer, or Local's bundled `mysql` + WP-CLI.
+- Browser tests: headless Chrome via puppeteer-core, with request interception
+  stubbing Pardot/HubSpot/YouTube so iframe loads can be counted.
 
 ---
 
@@ -112,12 +143,30 @@ running the Phase 3 checklist, then continue with Phase 3 pass 2 (iframe).
 - [x] No PHP notices/warnings with `WP_DEBUG` on during any of the above.
 - [x] Deactivate + reactivate keeps data intact (no teardown until Phase 6).
 - [x] Confirm `capture.js` loads with `?ver=0.4.0` (bust browser cache after reinstall).
+      (Re-verified at `?ver=0.5.0`.)
+
+### Phase 3 pass 2 — iframe attribution  — VERIFIED 2026-11-19 (stubbed CRM endpoints)
+- [x] Toggle off (default): no iframe rewritten, `iframe-attribution.js` not enqueued.
+- [x] Toggle on: allowlisted Pardot iframe is served as `data-sl-src` + `<noscript>` copy.
+- [x] Pardot iframe loads **exactly once**, with `sl_first_utm_*` / `sl_last_utm_*`
+      (source/medium/campaign) after two campaign visits; existing query param kept.
+- [x] YouTube iframe and lookalike domain `go.pardot.com.evil.test` untouched.
+- [x] CF7 `[hidden sl_first_utm_source]` etc. filled with first/last touch.
+- [x] Iframe added after load (HubSpot share link) gets params.
+- [x] Form added after load gets `sl_anon_id` + CRM fields (issue #3).
+- [x] HubSpot `onFormReady` postMessage fills fields in a same-origin form iframe.
+- [x] Sightline JS blocked (ad blocker): Pardot still loads once with original URL.
+- [x] JS disabled: `<noscript>` copy loads once, deferred blank iframe hidden.
+- [x] Admin settings save/render; bad nonce rejected; domain input sanitized.
+- [x] No JS errors; no PHP notices with `WP_DEBUG` on; pass 1 form tests still pass.
+- [ ] Real Pardot form with "prefill from URL" receives the values (issue #8).
+- [ ] Real HubSpot share link / embed receives the values (issue #8).
 
 ## Known gaps / next work
-- **Phase 3 pass 2 (NOT built):** iframe attribution — admin toggle, domain
-  allowlist, pre-load `src` rewrite for Pardot, postMessage for HubSpot.
-- **Phase 3 pass 1 limits (logged as issues #3, #4):** anon_id field injected at
-  load only (dynamic/popup forms miss it); cross-device same-hash = two rows.
+- **Phase 3 is complete** (0.5.0). Before shipping, verify iframe attribution
+  against a live Pardot form and HubSpot form (issue #8).
+- **Open limits:** cross-device same-hash = two rows (issue #4, Phase 4);
+  stale nonce under page caching (issue #2, Phase 6).
 - Then Phases 4 (reporting incl. traffic/drop-off), 5 (Sankey dashboard),
   6 (privacy/settings/retention/deletion), 7 (hosted, parked).
 

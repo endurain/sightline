@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       Sightline
  * Plugin URI:        https://example.com/sightline
- * Description:       Privacy-first multi-touch attribution. Captures UTM/ad-click touches, stores them first-party, and visualizes the path to conversion. (Phase 3: forms + identity resolution.)
- * Version:           0.4.1
+ * Description:       Privacy-first multi-touch attribution. Captures UTM/ad-click touches, stores them first-party, and visualizes the path to conversion. (Phase 3: forms, identity resolution, iframe attribution.)
+ * Version:           0.5.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Zac Sanders
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SIGHTLINE_VERSION', '0.4.1' );
+define( 'SIGHTLINE_VERSION', '0.5.0' );
 define( 'SIGHTLINE_DB_VERSION', '1' );
 define( 'SIGHTLINE_FILE', __FILE__ );
 define( 'SIGHTLINE_DIR', plugin_dir_path( __FILE__ ) );
@@ -34,10 +34,12 @@ require_once SIGHTLINE_DIR . 'includes/class-sightline-db-sink.php';
 require_once SIGHTLINE_DIR . 'includes/class-sightline-sinks.php';
 require_once SIGHTLINE_DIR . 'includes/class-sightline-rest.php';
 require_once SIGHTLINE_DIR . 'includes/class-sightline-forms.php';
+require_once SIGHTLINE_DIR . 'includes/class-sightline-iframe.php';
 
 Sightline_Capture::init();
 Sightline_REST::init();
 Sightline_Forms::init();
+Sightline_Iframe::init();
 
 if ( is_admin() ) {
 	require_once SIGHTLINE_DIR . 'admin/class-sightline-admin.php';

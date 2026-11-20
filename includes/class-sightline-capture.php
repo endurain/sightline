@@ -38,7 +38,19 @@ class Sightline_Capture {
 				'endpoint' => esc_url_raw( rest_url( 'sightline/v1/collect' ) ),
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'debug'    => (bool) ( defined( 'WP_DEBUG' ) && WP_DEBUG ),
+				'iframe'   => Sightline_Iframe::client_config(),
 			)
 		);
+
+		// Iframe form attribution (Phase 3 pass 2): only when the toggle is on.
+		if ( Sightline_Iframe::enabled() ) {
+			wp_enqueue_script(
+				'sightline-iframe-attribution',
+				SIGHTLINE_URL . 'assets/js/iframe-attribution.js',
+				array( 'sightline-capture' ),
+				SIGHTLINE_VERSION,
+				true
+			);
+		}
 	}
 }
