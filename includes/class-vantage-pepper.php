@@ -6,23 +6,23 @@
  * identifier cannot be reversed by brute force. Raw emails are NEVER stored.
  *
  * Storage priority:
- *   1. SIGHTLINE_PEPPER constant (wp-config) if the host allows editing it.
+ *   1. VANTAGE_PEPPER constant (wp-config) if the host allows editing it.
  *      Strongest isolation: the secret is not in the database.
  *   2. Otherwise an autoload=no option. Works on locked-down managed hosts
  *      (WP Engine, etc.) that forbid wp-config edits. The honest trade-off is
  *      that the pepper then lives in the same database as the hashes; the
  *      hosted version (Phase 7) removes this by hashing server-side.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Pepper {
+class Vantage_Pepper {
 
-	const OPTION = 'sightline_pepper';
+	const OPTION = 'vantage_pepper';
 
 	/**
 	 * Get the active pepper, generating and storing one on first use.
@@ -30,8 +30,8 @@ class Sightline_Pepper {
 	 * @return string
 	 */
 	public static function get() {
-		if ( defined( 'SIGHTLINE_PEPPER' ) && SIGHTLINE_PEPPER ) {
-			return SIGHTLINE_PEPPER;
+		if ( defined( 'VANTAGE_PEPPER' ) && VANTAGE_PEPPER ) {
+			return VANTAGE_PEPPER;
 		}
 
 		$pepper = get_option( self::OPTION );
@@ -56,7 +56,7 @@ class Sightline_Pepper {
 	 * @return string
 	 */
 	public static function status() {
-		if ( defined( 'SIGHTLINE_PEPPER' ) && SIGHTLINE_PEPPER ) {
+		if ( defined( 'VANTAGE_PEPPER' ) && VANTAGE_PEPPER ) {
 			return 'constant';
 		}
 		return get_option( self::OPTION ) ? 'database' : 'missing';

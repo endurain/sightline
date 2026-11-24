@@ -7,7 +7,7 @@
  * iframe's src. When enabled, this class:
  *
  *   1. Rewrites allowlisted iframes in the server HTML from `src` to
- *      `data-sl-src` (+ `data-sl-pending`), so the browser does not load them
+ *      `data-vt-src` (+ `data-vt-pending`), so the browser does not load them
  *      yet. A <noscript> copy of the original iframe keeps no-JS visitors working.
  *   2. Enqueues iframe-attribution.js, which appends first/last-touch params and
  *      sets the real src. Result: one load, with attribution in the URL.
@@ -18,17 +18,17 @@
  * browser, and server-side injection would leak one visitor's data to another
  * through full-page caches.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Iframe {
+class Vantage_Iframe {
 
-	const OPT_ENABLED = 'sightline_iframe_enabled';
-	const OPT_DOMAINS = 'sightline_iframe_domains';
+	const OPT_ENABLED = 'vantage_iframe_enabled';
+	const OPT_DOMAINS = 'vantage_iframe_domains';
 
 	/** Milliseconds before the inline fail-safe releases pending iframes. */
 	const FAILSAFE_MS = 2500;
@@ -104,7 +104,7 @@ class Sightline_Iframe {
 	}
 
 	/**
-	 * Config handed to the browser (merged into window.SightlineConfig).
+	 * Config handed to the browser (merged into window.VantageConfig).
 	 *
 	 * @return array
 	 */
@@ -154,7 +154,7 @@ class Sightline_Iframe {
 				$element = $m[0];
 				$open    = substr( $element, 0, strpos( $element, '>' ) + 1 );
 
-				if ( false !== stripos( $open, 'data-sl-src' ) ) {
+				if ( false !== stripos( $open, 'data-vt-src' ) ) {
 					return $element; // Already processed.
 				}
 				if ( ! preg_match( '#\ssrc\s*=\s*(["\'])(.*?)\1#is', $open, $src ) ) {
@@ -166,7 +166,7 @@ class Sightline_Iframe {
 					return $element;
 				}
 
-				$new_open = str_replace( $src[0], ' data-sl-src=' . $src[1] . $src[2] . $src[1] . ' data-sl-pending', $open );
+				$new_open = str_replace( $src[0], ' data-vt-src=' . $src[1] . $src[2] . $src[1] . ' data-vt-pending', $open );
 				$deferred++;
 
 				// No-JS copy: original iframe, minus its id so the page never has duplicates.
@@ -181,9 +181,9 @@ class Sightline_Iframe {
 		}
 
 		// No JS: hide the deferred (blank) iframes; their <noscript> copies show instead.
-		$failsafe = '<noscript><style>iframe[data-sl-pending]{display:none!important}</style></noscript>'
-			. '<script>(function(){function r(){var l=document.querySelectorAll("iframe[data-sl-pending]");'
-			. 'for(var i=0;i<l.length;i++){l[i].removeAttribute("data-sl-pending");l[i].src=l[i].getAttribute("data-sl-src");}}'
+		$failsafe = '<noscript><style>iframe[data-vt-pending]{display:none!important}</style></noscript>'
+			. '<script>(function(){function r(){var l=document.querySelectorAll("iframe[data-vt-pending]");'
+			. 'for(var i=0;i<l.length;i++){l[i].removeAttribute("data-vt-pending");l[i].src=l[i].getAttribute("data-vt-src");}}'
 			. 'function t(){setTimeout(r,' . (int) self::FAILSAFE_MS . ');}'
 			. 'if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",t);}else{t();}})();</script>';
 

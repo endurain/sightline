@@ -1,58 +1,58 @@
-# Sightline — User Guide
+# Vantage — User Guide
 
 Privacy-first multi-touch attribution for WordPress. Captures the full path your
 visitors take before they convert, without storing their email address.
 
 ## Install
 
-1. Upload the plugin zip under Plugins > Add New > Upload, or copy the `sightline`
+1. Upload the plugin zip under Plugins > Add New > Upload, or copy the `vantage`
    folder into `wp-content/plugins/`.
-2. Activate **Sightline**.
+2. Activate **Vantage**.
 3. That's it for capture. Visits and touches start recording immediately.
 
 ## How it works (plain version)
 
 - Every visitor gets an anonymous id stored in their own browser.
-- Sightline records each "touch" — the campaign (UTMs) or ad click that brought
+- Vantage records each "touch" — the campaign (UTMs) or ad click that brought
   them, plus the referrer and landing page.
-- When someone submits a form, Sightline hashes their email into a fingerprint and
+- When someone submits a form, Vantage hashes their email into a fingerprint and
   **discards the email**. The fingerprint links their visits together without ever
   storing who they are.
 - You see the whole journey, including people who never converted.
 
 ## CRM field setup (optional, one time)
 
-Sightline always records attribution on its own side. If you also want the data
+Vantage always records attribution on its own side. If you also want the data
 pushed into Pardot / HubSpot / your CRM, create these fields in your CRM once.
-Sightline auto-fills whichever exist and ignores the rest.
+Vantage auto-fills whichever exist and ignores the rest.
 
 **Minimal (recommended):**
 
 | Field (CRM) | Holds |
 |-------------|-------|
-| `sl_first_utm_source` | First-touch source |
-| `sl_first_utm_medium` | First-touch medium |
-| `sl_first_utm_campaign` | First-touch campaign |
-| `sl_last_utm_source` | Last-touch source |
-| `sl_last_utm_medium` | Last-touch medium |
-| `sl_last_utm_campaign` | Last-touch campaign |
+| `vt_first_utm_source` | First-touch source |
+| `vt_first_utm_medium` | First-touch medium |
+| `vt_first_utm_campaign` | First-touch campaign |
+| `vt_last_utm_source` | Last-touch source |
+| `vt_last_utm_medium` | Last-touch medium |
+| `vt_last_utm_campaign` | Last-touch campaign |
 
-**Fuller (optional):** add `sl_first_utm_term`, `sl_first_utm_content`,
-`sl_last_utm_term`, `sl_last_utm_content`, `sl_first_landing`, `sl_last_referrer`,
-`sl_touch_count`.
+**Fuller (optional):** add `vt_first_utm_term`, `vt_first_utm_content`,
+`vt_last_utm_term`, `vt_last_utm_content`, `vt_first_landing`, `vt_last_referrer`,
+`vt_touch_count`.
 
 - **Pardot:** create these as custom prospect fields, then map them to matching
   fields on your Form or Form Handler.
-- **HubSpot:** create these as contact properties; Sightline fills the matching
+- **HubSpot:** create these as contact properties; Vantage fills the matching
   hidden form fields.
 
-You never add hidden fields to your WordPress forms by hand. Sightline injects its
+You never add hidden fields to your WordPress forms by hand. Vantage injects its
 own tracking field automatically. The CRM fields above are the only manual step, and
 only if you want CRM pass-through.
 
 ## Forms with embedded (iframe) CRM forms
 
-If your form is an embedded Pardot/HubSpot iframe, open the **Sightline** admin
+If your form is an embedded Pardot/HubSpot iframe, open the **Vantage** admin
 page and turn on **Enable iframe form attribution**. Then:
 
 - Check the **form domain allowlist**. It starts with `go.pardot.com`,
@@ -60,15 +60,15 @@ page and turn on **Enable iframe form attribution**. Then:
   custom tracker domain (e.g. `go.yourcompany.com`). Subdomains match too. Only
   iframes on these domains are ever changed; YouTube, maps etc. are left alone.
 - Add the six **minimal** fields above to the embedded form as hidden fields, and
-  set them to **prefill from the URL / query string** (Pardot). Sightline puts the
+  set them to **prefill from the URL / query string** (Pardot). Vantage puts the
   values in the iframe's URL; the form has to be set to read them, or they're
   silently ignored.
 - Only first and last touch source / medium / campaign are passed to iframes (URL
   length limits). The fuller fields work on native WordPress forms only.
 - Test: open a page with the form using `?utm_source=test`, inspect the iframe in
-  your browser's devtools, and confirm its URL contains `sl_first_utm_source=test`.
+  your browser's devtools, and confirm its URL contains `vt_first_utm_source=test`.
 
-Visitors without JavaScript, or with an ad blocker that blocks Sightline, still see
+Visitors without JavaScript, or with an ad blocker that blocks Vantage, still see
 the form; it just loads without attribution.
 
 ## Native WordPress forms (CRM pass-through)
@@ -76,15 +76,15 @@ the form; it just loads without attribution.
 To pass attribution through a native form (e.g. Contact Form 7 posting to Pardot or
 HubSpot), add hidden fields with the CRM field names, e.g. in Contact Form 7:
 
-    [hidden sl_first_utm_source]
-    [hidden sl_last_utm_source]
-    [hidden sl_last_utm_campaign]
+    [hidden vt_first_utm_source]
+    [hidden vt_last_utm_source]
+    [hidden vt_last_utm_campaign]
 
-Sightline fills them automatically, including in forms that appear later (popups).
+Vantage fills them automatically, including in forms that appear later (popups).
 
 ## Privacy
 
 - Email addresses are never stored. Only a one-way fingerprint is kept.
 - Marketed accurately: this is privacy-first and pseudonymous, not "anonymous."
 - To delete a person's data, use the deletion tool (Phase 6) and enter their email;
-  Sightline fingerprints it and removes the matching records.
+  Vantage fingerprints it and removes the matching records.

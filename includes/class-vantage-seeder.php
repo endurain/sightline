@@ -7,14 +7,14 @@
  * "Converters" get a hashed_email derived from a fake address; the fake address
  * is never stored, exactly like production.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Seeder {
+class Vantage_Seeder {
 
 	/**
 	 * Campaign channels used to build touches.
@@ -71,9 +71,9 @@ class Sightline_Seeder {
 	public static function seed( $num_visitors = 2000 ) {
 		global $wpdb;
 
-		$visitors_t    = Sightline_Schema::table( 'visitors' );
-		$touches_t     = Sightline_Schema::table( 'touches' );
-		$conversions_t = Sightline_Schema::table( 'conversions' );
+		$visitors_t    = Vantage_Schema::table( 'visitors' );
+		$touches_t     = Vantage_Schema::table( 'touches' );
+		$conversions_t = Vantage_Schema::table( 'conversions' );
 
 		$channels = self::channels();
 		$now      = current_time( 'timestamp' );
@@ -100,7 +100,7 @@ class Sightline_Seeder {
 			if ( $converts ) {
 				// Fake email, hashed then discarded, same as production.
 				$fake_email   = 'seed' . $i . '_' . wp_rand( 1000, 9999 ) . '@example.com';
-				$hashed_email = Sightline_Pepper::hash_email( $fake_email );
+				$hashed_email = Vantage_Pepper::hash_email( $fake_email );
 				unset( $fake_email );
 			}
 
@@ -153,21 +153,21 @@ class Sightline_Seeder {
 			$created++;
 		}
 
-		update_option( 'sightline_seeded', $created );
+		update_option( 'vantage_seeded', $created );
 		return $created;
 	}
 
 	/**
-	 * Remove all Sightline data (truncates the three tables).
+	 * Remove all Vantage data (truncates the three tables).
 	 */
 	public static function clear() {
 		global $wpdb;
 		foreach ( array( 'touches', 'conversions', 'visitors' ) as $short ) {
-			$table = Sightline_Schema::table( $short );
+			$table = Vantage_Schema::table( $short );
 			// Table name is built from a fixed whitelist above, safe to interpolate.
 			$wpdb->query( "TRUNCATE TABLE `$table`" ); // phpcs:ignore WordPress.DB
 		}
-		delete_option( 'sightline_seeded' );
+		delete_option( 'vantage_seeded' );
 	}
 
 	/**

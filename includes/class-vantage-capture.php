@@ -3,18 +3,18 @@
  * Front-end enqueue of the capture script.
  *
  * The JS itself has no WordPress coupling. All WordPress-specific values
- * (endpoint URL, nonce) are passed in as window.SightlineConfig via
+ * (endpoint URL, nonce) are passed in as window.VantageConfig via
  * wp_localize_script, so the same capture.js lifts into the headless/hosted
  * world unchanged.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Capture {
+class Vantage_Capture {
 
 	public static function init() {
 		add_action( 'wp_enqueue_scripts', array( __CLASS__, 'enqueue' ) );
@@ -22,33 +22,33 @@ class Sightline_Capture {
 
 	public static function enqueue() {
 		wp_enqueue_script(
-			'sightline-capture',
-			SIGHTLINE_URL . 'assets/js/capture.js',
+			'vantage-capture',
+			VANTAGE_URL . 'assets/js/capture.js',
 			array(),
-			SIGHTLINE_VERSION,
+			VANTAGE_VERSION,
 			true
 		);
 
-		// Config injected as window.SightlineConfig. endpoint/nonce are used by
+		// Config injected as window.VantageConfig. endpoint/nonce are used by
 		// the Phase 2 transport; harmless to expose now.
 		wp_localize_script(
-			'sightline-capture',
-			'SightlineConfig',
+			'vantage-capture',
+			'VantageConfig',
 			array(
-				'endpoint' => esc_url_raw( rest_url( 'sightline/v1/collect' ) ),
+				'endpoint' => esc_url_raw( rest_url( 'vantage/v1/collect' ) ),
 				'nonce'    => wp_create_nonce( 'wp_rest' ),
 				'debug'    => (bool) ( defined( 'WP_DEBUG' ) && WP_DEBUG ),
-				'iframe'   => Sightline_Iframe::client_config(),
+				'iframe'   => Vantage_Iframe::client_config(),
 			)
 		);
 
 		// Iframe form attribution (Phase 3 pass 2): only when the toggle is on.
-		if ( Sightline_Iframe::enabled() ) {
+		if ( Vantage_Iframe::enabled() ) {
 			wp_enqueue_script(
-				'sightline-iframe-attribution',
-				SIGHTLINE_URL . 'assets/js/iframe-attribution.js',
-				array( 'sightline-capture' ),
-				SIGHTLINE_VERSION,
+				'vantage-iframe-attribution',
+				VANTAGE_URL . 'assets/js/iframe-attribution.js',
+				array( 'vantage-capture' ),
+				VANTAGE_VERSION,
 				true
 			);
 		}

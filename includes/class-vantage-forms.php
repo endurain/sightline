@@ -3,20 +3,20 @@
  * Form integration + identity resolution.
  *
  * Hooks the common form plugins. On submit:
- *   1. read the anon_id injected by capture.js (hidden sl_anon_id field),
+ *   1. read the anon_id injected by capture.js (hidden vt_anon_id field),
  *   2. find the submitted email, hash it with the pepper, DISCARD the raw email,
  *   3. record a conversion and attach the hashed identity to the visitor.
  *
  * The raw email never reaches the sink or the database. Only its hash does.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Forms {
+class Vantage_Forms {
 
 	public static function init() {
 		// Contact Form 7. CF7 fires exactly one of these per valid submission.
@@ -143,7 +143,7 @@ class Sightline_Forms {
 	private static function handle( $email, $form_type, $form_id ) {
 		// The form plugin has already validated this submission; we read the
 		// anon_id that capture.js injected as a hidden field.
-		$anon_id = isset( $_POST['sl_anon_id'] ) ? sanitize_text_field( wp_unslash( $_POST['sl_anon_id'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
+		$anon_id = isset( $_POST['vt_anon_id'] ) ? sanitize_text_field( wp_unslash( $_POST['vt_anon_id'] ) ) : ''; // phpcs:ignore WordPress.Security.NonceVerification
 		$anon_id = preg_replace( '/[^A-Za-z0-9\-]/', '', (string) $anon_id );
 		$anon_id = substr( $anon_id, 0, 64 );
 
@@ -153,7 +153,7 @@ class Sightline_Forms {
 			return;
 		}
 
-		$hashed_email = $email ? Sightline_Pepper::hash_email( $email ) : null;
+		$hashed_email = $email ? Vantage_Pepper::hash_email( $email ) : null;
 		unset( $email ); // Discard the raw email immediately.
 
 		$page_url = '';
@@ -170,6 +170,6 @@ class Sightline_Forms {
 			'time'      => current_time( 'mysql', true ),
 		);
 
-		Sightline_Sinks::get()->record_conversion( $anon_id, $hashed_email, $conversion );
+		Vantage_Sinks::get()->record_conversion( $anon_id, $hashed_email, $conversion );
 	}
 }

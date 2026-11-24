@@ -1,20 +1,20 @@
 <?php
 /**
- * Database schema for Sightline.
+ * Database schema for Vantage.
  *
- * Tables (prefixed with the site's $wpdb->prefix + "sl_"):
- *   sl_visitors     one row per visitor (anon_id, optional hashed_email)
- *   sl_touches      every captured touch, linked to a visitor
- *   sl_conversions  a conversion event (form submit), linked to a visitor
+ * Tables (prefixed with the site's $wpdb->prefix + "vt_"):
+ *   vt_visitors     one row per visitor (anon_id, optional hashed_email)
+ *   vt_touches      every captured touch, linked to a visitor
+ *   vt_conversions  a conversion event (form submit), linked to a visitor
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Schema {
+class Vantage_Schema {
 
 	/**
 	 * Fully-qualified table name for a given short name.
@@ -24,7 +24,7 @@ class Sightline_Schema {
 	 */
 	public static function table( $name ) {
 		global $wpdb;
-		return $wpdb->prefix . 'sl_' . $name;
+		return $wpdb->prefix . 'vt_' . $name;
 	}
 
 	/**
@@ -89,6 +89,6 @@ class Sightline_Schema {
 			dbDelta( $sql );
 		}
 
-		update_option( 'sightline_db_version', SIGHTLINE_DB_VERSION );
+		update_option( 'vantage_db_version', VANTAGE_DB_VERSION );
 	}
 }

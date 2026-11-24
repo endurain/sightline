@@ -7,14 +7,14 @@
  * to a central API, with zero change to the capture/ingestion code. The REST
  * controller only ever talks to a sink, never to the database directly.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-interface Sightline_Sink {
+interface Vantage_Sink {
 
 	/**
 	 * Persist a batch of touches for one anonymous visitor.

@@ -2,21 +2,21 @@
 /**
  * Activation / deactivation.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Activator {
+class Vantage_Activator {
 
 	/**
 	 * On activation: build the tables and make sure a pepper exists.
 	 */
 	public static function activate() {
-		Sightline_Schema::install();
-		Sightline_Pepper::ensure();
+		Vantage_Schema::install();
+		Vantage_Pepper::ensure();
 	}
 
 	/**

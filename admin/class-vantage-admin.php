@@ -3,28 +3,28 @@
  * Admin screen: table counts, pepper status, iframe form attribution settings,
  * and the seed / clear demo-data controls.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_Admin {
+class Vantage_Admin {
 
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
-		add_action( 'admin_post_sightline_seed', array( __CLASS__, 'handle_seed' ) );
-		add_action( 'admin_post_sightline_clear', array( __CLASS__, 'handle_clear' ) );
-		add_action( 'admin_post_sightline_save_iframe', array( __CLASS__, 'handle_save_iframe' ) );
+		add_action( 'admin_post_vantage_seed', array( __CLASS__, 'handle_seed' ) );
+		add_action( 'admin_post_vantage_clear', array( __CLASS__, 'handle_clear' ) );
+		add_action( 'admin_post_vantage_save_iframe', array( __CLASS__, 'handle_save_iframe' ) );
 	}
 
 	public static function menu() {
 		add_menu_page(
-			'Sightline',
-			'Sightline',
+			'Vantage',
+			'Vantage',
 			'manage_options',
-			'sightline',
+			'vantage',
 			array( __CLASS__, 'render' ),
 			'dashicons-chart-line',
 			58
@@ -40,7 +40,7 @@ class Sightline_Admin {
 		global $wpdb;
 		$out = array();
 		foreach ( array( 'visitors', 'touches', 'conversions' ) as $short ) {
-			$table           = Sightline_Schema::table( $short );
+			$table           = Vantage_Schema::table( $short );
 			$out[ $short ]   = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `$table`" ); // phpcs:ignore WordPress.DB
 		}
 		return $out;
@@ -52,7 +52,7 @@ class Sightline_Admin {
 		}
 
 		$counts = self::counts();
-		$pepper = Sightline_Pepper::status();
+		$pepper = Vantage_Pepper::status();
 
 		// Notices from redirects.
 		if ( isset( $_GET['seeded'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
@@ -60,16 +60,16 @@ class Sightline_Admin {
 			echo '<div class="notice notice-success is-dismissible"><p>Seeded ' . esc_html( number_format_i18n( $n ) ) . ' visitors.</p></div>';
 		}
 		if ( isset( $_GET['cleared'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-			echo '<div class="notice notice-success is-dismissible"><p>Sightline data cleared.</p></div>';
+			echo '<div class="notice notice-success is-dismissible"><p>Vantage data cleared.</p></div>';
 		}
 		if ( isset( $_GET['iframe_saved'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
 			echo '<div class="notice notice-success is-dismissible"><p>Iframe form attribution settings saved.</p></div>';
 		}
-		$iframe_on      = Sightline_Iframe::enabled();
-		$iframe_domains = Sightline_Iframe::domains();
+		$iframe_on      = Vantage_Iframe::enabled();
+		$iframe_domains = Vantage_Iframe::domains();
 		?>
 		<div class="wrap">
-			<h1>Sightline</h1>
+			<h1>Vantage</h1>
 			<p><em>Phase 3 — capture, ingestion, forms, and iframe attribution.</em></p>
 
 			<h2>Database</h2>
@@ -95,27 +95,27 @@ class Sightline_Admin {
 
 			<h2>Iframe form attribution</h2>
 			<p style="max-width:640px">
-				For CRM forms embedded as an iframe (Pardot, HubSpot share links), Sightline
+				For CRM forms embedded as an iframe (Pardot, HubSpot share links), Vantage
 				can't reach inside the form, but it can add first- and last-touch UTMs to the
 				iframe's URL before it loads. Only iframes on the domains below are changed.
 			</p>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
-				<input type="hidden" name="action" value="sightline_save_iframe">
-				<?php wp_nonce_field( 'sightline_save_iframe' ); ?>
+				<input type="hidden" name="action" value="vantage_save_iframe">
+				<?php wp_nonce_field( 'vantage_save_iframe' ); ?>
 				<table class="form-table" role="presentation">
 					<tr>
 						<th scope="row">Enable iframe form attribution</th>
 						<td>
 							<label>
-								<input type="checkbox" name="sightline_iframe_enabled" value="1" <?php checked( $iframe_on ); ?>>
+								<input type="checkbox" name="vantage_iframe_enabled" value="1" <?php checked( $iframe_on ); ?>>
 								Add attribution to allowlisted form iframes
 							</label>
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><label for="sightline_iframe_domains">Form domain allowlist</label></th>
+						<th scope="row"><label for="vantage_iframe_domains">Form domain allowlist</label></th>
 						<td>
-							<textarea id="sightline_iframe_domains" name="sightline_iframe_domains" rows="5" cols="40" class="code"><?php echo esc_textarea( implode( "\n", $iframe_domains ) ); ?></textarea>
+							<textarea id="vantage_iframe_domains" name="vantage_iframe_domains" rows="5" cols="40" class="code"><?php echo esc_textarea( implode( "\n", $iframe_domains ) ); ?></textarea>
 							<p class="description">
 								One domain per line. Subdomains match too. Add your Pardot
 								custom tracker domain (for example <code>go.yourcompany.com</code>).
@@ -128,10 +128,10 @@ class Sightline_Admin {
 
 			<h3>Setup checklist (required for the data to land)</h3>
 			<ol style="max-width:640px">
-				<li>Create the CRM fields from the User Guide: <code>sl_first_utm_source</code>,
-					<code>sl_first_utm_medium</code>, <code>sl_first_utm_campaign</code>,
-					<code>sl_last_utm_source</code>, <code>sl_last_utm_medium</code>,
-					<code>sl_last_utm_campaign</code>.</li>
+				<li>Create the CRM fields from the User Guide: <code>vt_first_utm_source</code>,
+					<code>vt_first_utm_medium</code>, <code>vt_first_utm_campaign</code>,
+					<code>vt_last_utm_source</code>, <code>vt_last_utm_medium</code>,
+					<code>vt_last_utm_campaign</code>.</li>
 				<li>Add them to the embedded form as hidden fields.</li>
 				<li><strong>Pardot:</strong> set each hidden field to prefill from the URL
 					(the URL parameter must match the field name above). If this isn't set,
@@ -140,7 +140,7 @@ class Sightline_Admin {
 					HubSpot prefills hidden fields from matching URL parameters.</li>
 				<li>Add the form's domain to the allowlist, enable the toggle, then load a page
 					with <code>?utm_source=test</code> and confirm the iframe URL carries
-					<code>sl_first_utm_source=test</code> (browser devtools &rarr; Elements).</li>
+					<code>vt_first_utm_source=test</code> (browser devtools &rarr; Elements).</li>
 			</ol>
 
 			<h2>Demo data</h2>
@@ -150,13 +150,13 @@ class Sightline_Admin {
 				is used and no email addresses are stored.
 			</p>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline">
-				<input type="hidden" name="action" value="sightline_seed">
-				<?php wp_nonce_field( 'sightline_seed' ); ?>
+				<input type="hidden" name="action" value="vantage_seed">
+				<?php wp_nonce_field( 'vantage_seed' ); ?>
 				<button class="button button-primary">Seed demo data</button>
 			</form>
-			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline" onsubmit="return confirm('Clear all Sightline data? This cannot be undone.');">
-				<input type="hidden" name="action" value="sightline_clear">
-				<?php wp_nonce_field( 'sightline_clear' ); ?>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" style="display:inline" onsubmit="return confirm('Clear all Vantage data? This cannot be undone.');">
+				<input type="hidden" name="action" value="vantage_clear">
+				<?php wp_nonce_field( 'vantage_clear' ); ?>
 				<button class="button">Clear data</button>
 			</form>
 		</div>
@@ -167,14 +167,14 @@ class Sightline_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Insufficient permissions.' );
 		}
-		check_admin_referer( 'sightline_seed' );
+		check_admin_referer( 'vantage_seed' );
 
-		$created = Sightline_Seeder::seed( 2000 );
+		$created = Vantage_Seeder::seed( 2000 );
 
 		wp_safe_redirect(
 			add_query_arg(
 				array(
-					'page'   => 'sightline',
+					'page'   => 'vantage',
 					'seeded' => $created,
 				),
 				admin_url( 'admin.php' )
@@ -187,18 +187,18 @@ class Sightline_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Insufficient permissions.' );
 		}
-		check_admin_referer( 'sightline_save_iframe' );
+		check_admin_referer( 'vantage_save_iframe' );
 
-		$enabled = ! empty( $_POST['sightline_iframe_enabled'] );
-		$raw     = isset( $_POST['sightline_iframe_domains'] ) ? sanitize_textarea_field( wp_unslash( $_POST['sightline_iframe_domains'] ) ) : '';
+		$enabled = ! empty( $_POST['vantage_iframe_enabled'] );
+		$raw     = isset( $_POST['vantage_iframe_domains'] ) ? sanitize_textarea_field( wp_unslash( $_POST['vantage_iframe_domains'] ) ) : '';
 
-		update_option( Sightline_Iframe::OPT_ENABLED, $enabled ? 1 : 0 );
-		update_option( Sightline_Iframe::OPT_DOMAINS, Sightline_Iframe::sanitize_domains( $raw ) );
+		update_option( Vantage_Iframe::OPT_ENABLED, $enabled ? 1 : 0 );
+		update_option( Vantage_Iframe::OPT_DOMAINS, Vantage_Iframe::sanitize_domains( $raw ) );
 
 		wp_safe_redirect(
 			add_query_arg(
 				array(
-					'page'         => 'sightline',
+					'page'         => 'vantage',
 					'iframe_saved' => 1,
 				),
 				admin_url( 'admin.php' )
@@ -211,14 +211,14 @@ class Sightline_Admin {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( 'Insufficient permissions.' );
 		}
-		check_admin_referer( 'sightline_clear' );
+		check_admin_referer( 'vantage_clear' );
 
-		Sightline_Seeder::clear();
+		Vantage_Seeder::clear();
 
 		wp_safe_redirect(
 			add_query_arg(
 				array(
-					'page'    => 'sightline',
+					'page'    => 'vantage',
 					'cleared' => 1,
 				),
 				admin_url( 'admin.php' )

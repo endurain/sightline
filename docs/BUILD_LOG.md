@@ -1,4 +1,4 @@
-# Sightline — Build Log
+# Vantage — Build Log
 
 Running record of phase status, decisions, and issues. Update as you go.
 See `BUILD_PLAN.md` (repo root) for the full phase plan.
@@ -21,14 +21,14 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 ## Decisions log
 
 - **Sink pattern.** REST controller never writes to the DB directly; it calls a
-  `Sightline_Sink`. Default is `Sightline_DB_Sink`; filter `sightline_sink` swaps
+  `Vantage_Sink`. Default is `Vantage_DB_Sink`; filter `vantage_sink` swaps
   it. This is what lets Phase 7 (hosted) reuse ingestion unchanged.
 - **Email hashing.** `HMAC-SHA256(pepper, normalized_email)`. Email is normalized
   (lowercase + trim only — no gmail dot/plus stripping, too opinionated), hashed,
   and discarded. Never stored.
 - **Converters only.** Only visitors who submit a form get a hashed_email.
   Anonymous visitors stay anon_id-only (cleaner privacy, nothing to tie to a name).
-- **Pepper storage.** Prefer `SIGHTLINE_PEPPER` constant (wp-config) when the host
+- **Pepper storage.** Prefer `VANTAGE_PEPPER` constant (wp-config) when the host
   allows it; otherwise an autoload=off option. Honest trade-off: option storage puts
   the pepper in the same DB as the hashes. Hosted version removes this.
 - **Hosted hashing (Phase 7).** Layered: per-site key hashes on the client (email
@@ -46,7 +46,7 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
   recorded on both `wpcf7_mail_sent` and `wpcf7_mail_failed` (CF7 fires exactly
   one). A broken mail setup on the host must not erase attribution. (0.4.1)
 - **Iframe attribution = server defers, browser fills.** (0.5.0) An output buffer
-  rewrites allowlisted iframes from `src` to `data-sl-src` + `data-sl-pending`;
+  rewrites allowlisted iframes from `src` to `data-vt-src` + `data-vt-pending`;
   `iframe-attribution.js` adds params and sets `src`, so the iframe loads once.
   The server never injects attribution itself: touches live in the browser, and
   server-side values would leak between visitors through full-page caches (the
@@ -56,14 +56,14 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
   inline fail-safe releases pending iframes with the original `src` after 2.5s;
   `iframe-attribution.js` also releases them itself if `capture.js` never loads.
 - **What goes in the iframe URL:** first + last `utm_source/medium/campaign`
-  only (`sl_first_*`, `sl_last_*`), for URL length limits. Existing params are
+  only (`vt_first_*`, `vt_last_*`), for URL length limits. Existing params are
   never overwritten. Native forms get the fuller set filled into any existing
-  `sl_*` fields (term, content, `sl_first_landing`, `sl_last_referrer`,
-  `sl_touch_count`). Sightline fills fields that exist; it never creates them.
+  `vt_*` fields (term, content, `vt_first_landing`, `vt_last_referrer`,
+  `vt_touch_count`). Vantage fills fields that exist; it never creates them.
 - **Allowlist matching:** exact host or a true subdomain (`go.pardot.com` matches
   `x.go.pardot.com`, not `go.pardot.com.evil.test`). Defaults: `go.pardot.com`,
   `pi.pardot.com`, `share.hsforms.com`, `share-eu1.hsforms.com`. Toggle off by default.
-- **HubSpot postMessage:** on `hsFormCallback` / `onFormReady`, fill `sl_*` fields
+- **HubSpot postMessage:** on `hsFormCallback` / `onFormReady`, fill `vt_*` fields
   in any same-origin iframe (HubSpot's script-built embed) and in the page itself
   (raw embed). Cross-origin iframes are skipped; share links use the `src` rewrite.
 - **Late-loading iframes and forms:** a MutationObserver handles iframes and forms
@@ -78,17 +78,17 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 2 | Full-page caches can serve a stale REST nonce to anonymous visitors | Open — Phase 6, switch to a cache-friendly token |
 | 3 | anon_id hidden field injected at load only; forms added later (popups/AJAX) miss it | Resolved in 0.5.0 — `capture.js` MutationObserver prepares forms added after load (verified) |
 | 4 | Cross-device identity: same hashed_email on two anon_ids = two visitor rows | Open — stitch at reporting (Phase 4) or a later merge |
-| 5 | CF7 conversions only hook `wpcf7_mail_sent`; if the notification email fails (`mail_failed`), the conversion is silently dropped (reproduced 2026-11-19) | Resolved in 0.4.1 — `Sightline_Forms` now also hooks `wpcf7_mail_failed`; verified a forced mail failure records the conversion |
+| 5 | CF7 conversions only hook `wpcf7_mail_sent`; if the notification email fails (`mail_failed`), the conversion is silently dropped (reproduced 2026-11-19) | Resolved in 0.4.1 — `Vantage_Forms` now also hooks `wpcf7_mail_failed`; verified a forced mail failure records the conversion |
 | 6 | Current CF7 (6.2+) requires PHP 8.3; Local test site runs PHP 8.2, so testing used CF7 6.1.4 | Note — bump site PHP to test against current CF7 |
-| 7 | Pass 1 never filled the `sl_first_*` / `sl_last_*` CRM fields the user guide promised; only `sl_anon_id` was injected | Resolved in 0.5.0 — `capture.js` `fillFields()` fills existing fields (verified on CF7 `[hidden]` fields) |
+| 7 | Pass 1 never filled the `vt_first_*` / `vt_last_*` CRM fields the user guide promised; only `vt_anon_id` was injected | Resolved in 0.5.0 — `capture.js` `fillFields()` fills existing fields (verified on CF7 `[hidden]` fields) |
 | 8 | Iframe attribution only tested against stubbed Pardot/HubSpot responses | Open — verify with a real Pardot form (prefill from URL) and a HubSpot share link / embed before shipping |
 | 9 | Iframes outside the main HTML response (added by page-builder JS) aren't deferred, so they may load twice | Known limit — documented; acceptable |
 
 ## Test environment
 
 - Local WordPress (Local by WP Engine), PHP 8.2. Contact Form 7 6.1.4 and
-  WPForms Lite for form testing. Test pages: `/sightline-form-test/`,
-  `/sightline-wpforms-test/`, `/sightline-iframe-test/`.
+  WPForms Lite for form testing. Test pages: `/vantage-form-test/`,
+  `/vantage-wpforms-test/`, `/vantage-iframe-test/`.
 - DB inspection via TablePlus / Adminer, or Local's bundled `mysql` + WP-CLI.
 - Browser tests: headless Chrome via puppeteer-core, with request interception
   stubbing Pardot/HubSpot/YouTube so iframe loads can be counted.
@@ -98,46 +98,46 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 ## HANDOFF NOTE (2026-11-19)
 
 Development continues in a code tool / IDE from here. Code of record: the
-`sightline/` plugin folder at version **0.4.0** (shipped as
-`sightline-phase3pass1.zip`). Everything below is built and lints clean; the
+`vantage/` plugin folder at version **0.4.0** (shipped as
+`vantage-phase3pass1.zip`). Everything below is built and lints clean; the
 Phase 3 pass-1 work is **built but NOT yet tested on a live site**. Start by
 running the Phase 3 checklist, then continue with Phase 3 pass 2 (iframe).
 
 ## Testing checklist (state of each item)
 
 ### Phase 0 — scaffold / schema / seeder  — VERIFIED
-- [x] Plugin activates with no errors; Sightline admin menu appears.
-- [x] Tables created: `{prefix}_sl_visitors`, `_sl_touches`, `_sl_conversions`.
+- [x] Plugin activates with no errors; Vantage admin menu appears.
+- [x] Tables created: `{prefix}_vt_visitors`, `_vt_touches`, `_vt_conversions`.
 - [x] Seed button creates ~2,000 visitors / ~4,165 touches / ~428 conversions.
 - [x] Pepper status shows "Database"; converters have 64-char hash, others NULL.
 - [x] Clear button empties tables.
 
 ### Phase 1 — client capture  — VERIFIED
-- [x] Visiting `?utm_source=...` sets an `sl_anon` cookie.
-- [x] `Sightline.getTouches()` shows the touch; first touch preserved on 2nd campaign.
+- [x] Visiting `?utm_source=...` sets an `vt_anon` cookie.
+- [x] `Vantage.getTouches()` shows the touch; first touch preserved on 2nd campaign.
 - [x] Refresh within 30 min does NOT add a duplicate touch.
 - [x] `capture.js` contains zero WordPress references (build-checked).
 
 ### Phase 2 — REST ingestion  — VERIFIED
-- [x] `POST /wp-json/sightline/v1/collect` returns 200 with
+- [x] `POST /wp-json/vantage/v1/collect` returns 200 with
       `{"ok":true,"visitor_id":N,"inserted":M}`.
 - [x] A real browser visit creates a NEW visitor row (id > 2000) and touch rows.
 - [x] Server dedupes identical consecutive touches.
 
 ### Phase 3 pass 1 — forms + identity  — VERIFIED 2026-11-19 (CF7 6.1.4, WPForms Lite 2.0.5.1, headless Chrome)
 - [x] After reinstall, a page with a CF7 form contains a hidden
-      `<input name="sl_anon_id" value="<uuid>">` (injected by capture.js).
-- [x] Submitting the form inserts a row in `_sl_conversions` with
+      `<input name="vt_anon_id" value="<uuid>">` (injected by capture.js).
+- [x] Submitting the form inserts a row in `_vt_conversions` with
       `form_type = 'cf7'` and a valid `visitor_id`.
 - [x] That visitor row now has a 64-char `hashed_email`.
 - [x] **PRIVACY CHECK:** search the ENTIRE database for the email you submitted.
-      It must NOT appear in any Sightline table. (It may appear in the form
-      plugin's own tables — that's the form plugin, not Sightline.)
+      It must NOT appear in any Vantage table. (It may appear in the form
+      plugin's own tables — that's the form plugin, not Vantage.)
 - [x] Re-submitting with a different email on the same browser does NOT overwrite
       the existing `hashed_email` (first identity wins).
 - [ ] Repeat for Gravity Forms (`form_type = 'gravityforms'`) if available. *(Not tested — paid plugin, not installed.)*
 - [x] Repeat for WPForms (`form_type = 'wpforms'`) if available.
-- [x] Submit with JS disabled / no `sl_anon_id`: handler bails cleanly, no PHP error.
+- [x] Submit with JS disabled / no `vt_anon_id`: handler bails cleanly, no PHP error.
 
 ### Cross-cutting checks
 - [x] No PHP notices/warnings with `WP_DEBUG` on during any of the above.
@@ -147,15 +147,15 @@ running the Phase 3 checklist, then continue with Phase 3 pass 2 (iframe).
 
 ### Phase 3 pass 2 — iframe attribution  — VERIFIED 2026-11-19 (stubbed CRM endpoints)
 - [x] Toggle off (default): no iframe rewritten, `iframe-attribution.js` not enqueued.
-- [x] Toggle on: allowlisted Pardot iframe is served as `data-sl-src` + `<noscript>` copy.
-- [x] Pardot iframe loads **exactly once**, with `sl_first_utm_*` / `sl_last_utm_*`
+- [x] Toggle on: allowlisted Pardot iframe is served as `data-vt-src` + `<noscript>` copy.
+- [x] Pardot iframe loads **exactly once**, with `vt_first_utm_*` / `vt_last_utm_*`
       (source/medium/campaign) after two campaign visits; existing query param kept.
 - [x] YouTube iframe and lookalike domain `go.pardot.com.evil.test` untouched.
-- [x] CF7 `[hidden sl_first_utm_source]` etc. filled with first/last touch.
+- [x] CF7 `[hidden vt_first_utm_source]` etc. filled with first/last touch.
 - [x] Iframe added after load (HubSpot share link) gets params.
-- [x] Form added after load gets `sl_anon_id` + CRM fields (issue #3).
+- [x] Form added after load gets `vt_anon_id` + CRM fields (issue #3).
 - [x] HubSpot `onFormReady` postMessage fills fields in a same-origin form iframe.
-- [x] Sightline JS blocked (ad blocker): Pardot still loads once with original URL.
+- [x] Vantage JS blocked (ad blocker): Pardot still loads once with original URL.
 - [x] JS disabled: `<noscript>` copy loads once, deferred blank iframe hidden.
 - [x] Admin settings save/render; bad nonce rejected; domain input sanitized.
 - [x] No JS errors; no PHP notices with `WP_DEBUG` on; pass 1 form tests still pass.

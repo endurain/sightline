@@ -2,23 +2,23 @@
 /**
  * REST ingestion endpoint.
  *
- *   POST /wp-json/sightline/v1/collect
+ *   POST /wp-json/vantage/v1/collect
  *   body: { "anon_id": "...", "touches": [ {utm_source,...,time}, ... ] }
  *
  * Validates and sanitizes, then hands the batch to the active sink. The
  * controller never touches the database directly (that's the sink's job),
  * which keeps ingestion destination-agnostic.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_REST {
+class Vantage_REST {
 
-	const NAMESPACE = 'sightline/v1';
+	const NAMESPACE = 'vantage/v1';
 
 	/** Click id keys we accept. */
 	private static $click_keys = array(
@@ -53,15 +53,15 @@ class Sightline_REST {
 	public static function permission( $request ) {
 		$nonce = $request->get_header( 'X-WP-Nonce' );
 		if ( ! $nonce || ! wp_verify_nonce( $nonce, 'wp_rest' ) ) {
-			return new WP_Error( 'sightline_forbidden', 'Invalid or missing nonce.', array( 'status' => 403 ) );
+			return new WP_Error( 'vantage_forbidden', 'Invalid or missing nonce.', array( 'status' => 403 ) );
 		}
 
 		// Light rate limit: ~600 requests/min per IP.
 		$ip  = isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) ) : 'unknown';
-		$key = 'sl_rl_' . md5( $ip );
+		$key = 'vt_rl_' . md5( $ip );
 		$n   = (int) get_transient( $key );
 		if ( $n > 600 ) {
-			return new WP_Error( 'sightline_rate_limited', 'Too many requests.', array( 'status' => 429 ) );
+			return new WP_Error( 'vantage_rate_limited', 'Too many requests.', array( 'status' => 429 ) );
 		}
 		set_transient( $key, $n + 1, MINUTE_IN_SECONDS );
 
@@ -99,7 +99,7 @@ class Sightline_REST {
 			}
 		}
 
-		$result = Sightline_Sinks::get()->record( $anon_id, $touches );
+		$result = Vantage_Sinks::get()->record( $anon_id, $touches );
 
 		return new WP_REST_Response(
 			array(

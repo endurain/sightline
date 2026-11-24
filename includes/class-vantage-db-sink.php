@@ -2,14 +2,14 @@
 /**
  * Default sink: writes touches to the local WordPress database.
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_DB_Sink implements Sightline_Sink {
+class Vantage_DB_Sink implements Vantage_Sink {
 
 	/** Minutes within which an identical consecutive touch is treated as a dupe. */
 	const DEDUPE_MINUTES = 30;
@@ -24,8 +24,8 @@ class Sightline_DB_Sink implements Sightline_Sink {
 	public function record( $anon_id, array $touches ) {
 		global $wpdb;
 
-		$visitors = Sightline_Schema::table( 'visitors' );
-		$touches_t = Sightline_Schema::table( 'touches' );
+		$visitors = Vantage_Schema::table( 'visitors' );
+		$touches_t = Vantage_Schema::table( 'touches' );
 		$now      = current_time( 'mysql', true ); // GMT
 
 		// --- Upsert visitor by anon_id ---
@@ -108,8 +108,8 @@ class Sightline_DB_Sink implements Sightline_Sink {
 	public function record_conversion( $anon_id, $hashed_email, array $conversion ) {
 		global $wpdb;
 
-		$visitors    = Sightline_Schema::table( 'visitors' );
-		$conversions = Sightline_Schema::table( 'conversions' );
+		$visitors    = Vantage_Schema::table( 'visitors' );
+		$conversions = Vantage_Schema::table( 'conversions' );
 		$now         = current_time( 'mysql', true );
 
 		// Upsert the visitor by anon_id.
@@ -176,7 +176,7 @@ class Sightline_DB_Sink implements Sightline_Sink {
 	 */
 	private function is_recent_duplicate( $visitor_id, $t ) {
 		global $wpdb;
-		$touches_t = Sightline_Schema::table( 'touches' );
+		$touches_t = Vantage_Schema::table( 'touches' );
 
 		$last = $wpdb->get_row(
 			$wpdb->prepare(

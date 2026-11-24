@@ -1,6 +1,6 @@
-# Sightline — Build Plan
+# Vantage — Build Plan
 
-> Working name: **Sightline**. This file is the master context document. Paste the
+> Working name: **Vantage**. This file is the master context document. Paste the
 > relevant phase section (plus this header) into a fresh Claude instance to resume
 > work without re-explaining the project.
 
@@ -30,7 +30,7 @@ v1 is **local-first**: the plugin captures touches and stores them in the site's
 WordPress DB, and the dashboard lives in wp-admin. But the capture pipeline must be
 **destination-agnostic**: capture logic hands finished touch data to a "sink", and the
 local DB is simply the default sink. This keeps the door open for a hosted SaaS
-dashboard later (Phase 7) where the sink becomes "POST to Sightline's central API"
+dashboard later (Phase 7) where the sink becomes "POST to Vantage's central API"
 instead, with zero rewrite of the capture code. Do not hard-wire DB writes into the
 capture/ingestion path; route them through a sink interface.
 
@@ -57,11 +57,11 @@ front end (WordPress, Next.js, static, anything with a script tag). Rule for v1:
 - Positioning: "privacy-first, no email addresses stored." NOT "anonymous."
 
 ## Data model (created in Phase 0)
-- `sl_visitors` — `id` (PK), `anon_id` (first-party cookie uuid), `hashed_email`
+- `vt_visitors` — `id` (PK), `anon_id` (first-party cookie uuid), `hashed_email`
   (nullable until a form is submitted), `first_seen`, `last_seen`.
-- `sl_touches` — `id`, `visitor_id` (FK), `utm_source/medium/campaign/term/content`,
+- `vt_touches` — `id`, `visitor_id` (FK), `utm_source/medium/campaign/term/content`,
   `click_ids` (json: gclid, fbclid, etc.), `referrer`, `landing_url`, `touch_time`.
-- `sl_conversions` — `id`, `visitor_id` (FK), `form_id`, `form_type`, `conversion_time`,
+- `vt_conversions` — `id`, `visitor_id` (FK), `form_id`, `form_type`, `conversion_time`,
   `page_url`.
 - Identity resolution: anon_id links touches before a form submit; on submit, the
   hashed_email is written to that visitor row, merging their history.
@@ -80,13 +80,13 @@ ends with a **Done when** checklist so you know it's complete before moving on.
 A synthetic-data seeder so later phases have something to build against without a
 live site.
 - Standard plugin header, main file, activation/deactivation hooks.
-- `dbDelta()` schema for `sl_visitors`, `sl_touches`, `sl_conversions`.
-- Pepper bootstrap: read from `SIGHTLINE_PEPPER` constant, generate + store one if absent.
-- `wp sightline seed` WP-CLI command (or an admin button) that inserts ~2,000 fake
+- `dbDelta()` schema for `vt_visitors`, `vt_touches`, `vt_conversions`.
+- Pepper bootstrap: read from `VANTAGE_PEPPER` constant, generate + store one if absent.
+- `wp vantage seed` WP-CLI command (or an admin button) that inserts ~2,000 fake
   visitors with realistic messy journeys (multiple touches, return visits, some
   converting, varied UTM combos).
-**Files:** `sightline.php`, `includes/class-sightline-activator.php`, `includes/class-sightline-schema.php`,
-`includes/class-sightline-seeder.php`, `includes/class-sightline-pepper.php`, `includes/class-sightline-cli.php`.
+**Files:** `vantage.php`, `includes/class-vantage-activator.php`, `includes/class-vantage-schema.php`,
+`includes/class-vantage-seeder.php`, `includes/class-vantage-pepper.php`, `includes/class-vantage-cli.php`.
 **Done when:** plugin activates, three tables exist, seeder fills them, deactivate
 leaves data intact.
 
@@ -102,33 +102,33 @@ the URL, and persists them first-party across the visit.
 - First-touch is preserved and never overwritten; each new campaign hit is a new touch.
 - Enqueue the script from the plugin, passing config (endpoint URL, nonce) via
   `wp_localize_script` so the JS stays WP-ignorant.
-**Files:** `assets/js/capture.js`, `includes/class-sightline-capture.php` (enqueue + config).
+**Files:** `assets/js/capture.js`, `includes/class-vantage-capture.php` (enqueue + config).
 **Done when:** visiting with `?utm_source=...` writes an anon_id cookie and a touch
 entry you can see in devtools; a second campaign visit adds a second touch; capture.js
 contains zero WordPress-specific references.
 
 ## Phase 2 — REST ingestion endpoint
 **Builds:** The endpoint the capture script POSTs to, which writes touches to the DB.
-- Register `POST /wp-json/sightline/v1/collect`.
+- Register `POST /wp-json/vantage/v1/collect`.
 - Validate + sanitize payload (anon_id, touches, landing url, referrer).
 - Upsert the visitor by anon_id; insert new touches (dedupe identical consecutive touches).
 - Nonce / rate-limit basic protection.
 - Capture script sends its buffered touches on page load.
-**Files:** `includes/class-sightline-rest.php`, `includes/interface-sightline-sink.php`, `includes/class-sightline-db-sink.php`, `includes/class-sightline-sinks.php`, update `capture.js` to POST.
-**Done when:** real visits (not just seed data) land in `sl_visitors` / `sl_touches`.
+**Files:** `includes/class-vantage-rest.php`, `includes/interface-vantage-sink.php`, `includes/class-vantage-db-sink.php`, `includes/class-vantage-sinks.php`, update `capture.js` to POST.
+**Done when:** real visits (not just seed data) land in `vt_visitors` / `vt_touches`.
 
 ## Phase 3 — Form integration + identity resolution
 **Builds:** Hook form submissions, resolve the anonymous visitor to a hashed person,
 and feed attribution into the CRM.
 - Hook Gravity Forms, Contact Form 7, WPForms submit events.
-- Pull the email field, normalize, `hash = HMAC-SHA256(pepper, normalized_email)` via `Sightline_Pepper::hash_email()`, discard email.
+- Pull the email field, normalize, `hash = HMAC-SHA256(pepper, normalized_email)` via `Vantage_Pepper::hash_email()`, discard email.
 - Write hashed_email onto the current anon_id's visitor row (merge history).
-- Record a row in `sl_conversions`.
+- Record a row in `vt_conversions`.
 - Inject hidden fields (first/last touch UTMs) into forms so the values reach
   Pardot/HubSpot/etc. on submit.
 
 **Form embed compatibility (same-origin policy matters here):**
-Two separate jobs. Job 1 (log attribution in Sightline's own DB) always works, because
+Two separate jobs. Job 1 (log attribution in Vantage's own DB) always works, because
 touches are captured on the parent page regardless of embed type. Job 2 (push attribution
 INTO the CRM) depends on the embed:
 - **Native / on-domain HTML forms** (Gravity, CF7, WPForms, HubSpot raw embed, Pardot
@@ -150,7 +150,7 @@ INTO the CRM) depends on the embed:
 - This gets data to the doorstep; the CRM form must be configured to **prefill from the
   query string** to receive it. Ship a short in-admin setup checklist so users know to
   set that up, and aren't confused if it silently doesn't populate.
-**Files:** `includes/class-sightline-forms.php` (forms + identity resolution), hidden-field JS in `capture.js`,
+**Files:** `includes/class-vantage-forms.php` (forms + identity resolution), hidden-field JS in `capture.js`,
 `assets/js/iframe-attribution.js`.
 **Done when:** submitting a native form ties that session's touches to a hashed id, logs
 a conversion, and hidden fields carry attribution through; AND with the toggle on, a
@@ -167,7 +167,7 @@ respected, no double load).
   see where a visitor goes after leaving the site.
 - Admin data endpoint the dashboard will call.
 - Build and test entirely against Phase 0 seed data.
-**Files:** `includes/class-sightline-reports.php`, `includes/class-sightline-rest-admin.php`.
+**Files:** `includes/class-vantage-reports.php`, `includes/class-vantage-rest-admin.php`.
 **Done when:** an admin-only endpoint returns correct first/last/multi-touch JSON
 for seeded conversions, plus traffic/drop-off JSON covering non-converting visitors.
 
@@ -179,7 +179,7 @@ for seeded conversions, plus traffic/drop-off JSON covering non-converting visit
   campaign, conversion rate, drop-off). The Sankey is the conversion story; this is the
   whole-funnel story.
 - Basic filters (date range, campaign). Summary tiles (visitors, conversions, top paths).
-**Files:** `admin/class-sightline-admin.php`, `assets/js/dashboard.js`.
+**Files:** `admin/class-vantage-admin.php`, `assets/js/dashboard.js`.
 **Done when:** the admin page shows a working Sankey AND a traffic/drop-off view of the
 real/seeded data, with date filtering.
 
@@ -190,7 +190,7 @@ real/seeded data, with date filtering.
 - Delete-by-hash function for erasure requests (hash an email, delete that visitor).
 - Consent gating so capture respects a consent signal.
 - README, inline docs, uninstall cleanup.
-**Files:** `admin/class-sightline-settings.php`, `includes/class-sightline-privacy.php`, `uninstall.php`,
+**Files:** `admin/class-vantage-settings.php`, `includes/class-vantage-privacy.php`, `uninstall.php`,
 `README.md`.
 **Done when:** settings work, old data purges on schedule, a given email can be
 erased, and the plugin uninstalls cleanly.
@@ -204,7 +204,7 @@ turns this from a one-time plugin into a monthly SaaS, and it's how you land age
 (one login, many client sites).
 **What makes it possible without a rewrite:** the Phase 2 ingestion pipeline uses a
 destination-agnostic sink (see architecture rule up top). v1's sink = local WP DB.
-v2 adds a second sink = "POST to Sightline's central API," plus:
+v2 adds a second sink = "POST to Vantage's central API," plus:
 - A central service (server + database) that receives touch data from client sites.
 - Auth + multi-tenant accounts (an org, its sites, its users).
 - The same reporting + Sankey + traffic views, served from the hosted app.

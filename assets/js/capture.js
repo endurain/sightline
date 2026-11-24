@@ -1,21 +1,21 @@
 /**
- * Sightline capture library.
+ * Vantage capture library.
  *
  * Framework-agnostic on purpose: it reads optional config from
- * window.SightlineConfig but has safe defaults, so this exact file runs on
+ * window.VantageConfig but has safe defaults, so this exact file runs on
  * WordPress, a headless front end, or any plain HTML page. It has NO WordPress
  * coupling. Phase 2 adds the POST-to-endpoint transport where marked.
  *
  * What it does (Phase 1):
- *   - ensures a first-party anonymous id cookie (sl_anon)
+ *   - ensures a first-party anonymous id cookie (vt_anon)
  *   - reads UTMs + ad click ids + referrer from the current URL
  *   - appends a "touch" to a first-party touch list (localStorage, cookie fallback)
  *   - preserves first touch (list is append-only) and dedupes refreshes
- *   - adds a hidden sl_anon_id field to every form (including forms added later)
- *   - fills any existing sl_first_* / sl_last_* CRM fields with attribution
- *   - fires a `sightline:ready` event on document when done
+ *   - adds a hidden vt_anon_id field to every form (including forms added later)
+ *   - fills any existing vt_first_* / vt_last_* CRM fields with attribution
+ *   - fires a `vantage:ready` event on document when done
  *
- * Inspect in devtools:  window.Sightline.getTouches()  /  .getAnonId()  /  .getAttribution()
+ * Inspect in devtools:  window.Vantage.getTouches()  /  .getAnonId()  /  .getAttribution()
  */
 (function (window, document) {
 	'use strict';
@@ -23,9 +23,9 @@
 	var defaults = {
 		endpoint: null,            // host-injected; transport POSTs here
 		nonce: null,               // host-injected; sent as X-WP-Nonce
-		cookieName: 'sl_anon',     // anonymous visitor id
-		storageKey: 'sl_touches',  // touch list
-		sentKey: 'sl_sent',        // how many touches have been sent
+		cookieName: 'vt_anon',     // anonymous visitor id
+		storageKey: 'vt_touches',  // touch list
+		sentKey: 'vt_sent',        // how many touches have been sent
 		cookieDays: 365,
 		dedupeMinutes: 30,         // identical touch within this window is ignored
 		debug: false,
@@ -35,7 +35,7 @@
 		]
 	};
 
-	var cfg = merge(defaults, window.SightlineConfig || {});
+	var cfg = merge(defaults, window.VantageConfig || {});
 
 	function merge(a, b) {
 		var out = {}, k;
@@ -174,7 +174,7 @@
 			if (res && res.ok) {
 				setSentCount(total); // mark everything through this batch as sent
 				if (cfg.debug && window.console) {
-					window.console.debug('[Sightline] synced ' + unsent.length + ' touch(es)');
+					window.console.debug('[Vantage] synced ' + unsent.length + ' touch(es)');
 				}
 			}
 		}).catch(function () {
@@ -211,17 +211,17 @@
 		if (!list.length) { return out; }
 		var first = list[0], last = list[list.length - 1];
 		UTM_PARTS.forEach(function (p) {
-			if (first['utm_' + p]) { out['sl_first_utm_' + p] = first['utm_' + p]; }
-			if (last['utm_' + p]) { out['sl_last_utm_' + p] = last['utm_' + p]; }
+			if (first['utm_' + p]) { out['vt_first_utm_' + p] = first['utm_' + p]; }
+			if (last['utm_' + p]) { out['vt_last_utm_' + p] = last['utm_' + p]; }
 		});
-		if (first.landing_url) { out.sl_first_landing = first.landing_url; }
-		if (last.referrer) { out.sl_last_referrer = last.referrer; }
-		out.sl_touch_count = String(list.length);
+		if (first.landing_url) { out.vt_first_landing = first.landing_url; }
+		if (last.referrer) { out.vt_last_referrer = last.referrer; }
+		out.vt_touch_count = String(list.length);
 		return out;
 	}
 
 	/**
-	 * Fill any existing fields named like the CRM keys (sl_first_utm_source, ...)
+	 * Fill any existing fields named like the CRM keys (vt_first_utm_source, ...)
 	 * inside `scope`. Never creates fields and never overwrites a non-empty value.
 	 */
 	function fillFields(scope) {
@@ -247,13 +247,13 @@
 	}
 
 	/* ---- Hidden-field injection for native forms ---- */
-	// Adds a hidden sl_anon_id input to a form so the server can tie a
+	// Adds a hidden vt_anon_id input to a form so the server can tie a
 	// submission back to this visitor. Idempotent.
 	function prepareForm(form, anonId) {
-		if (!form.querySelector('input[name="sl_anon_id"]')) {
+		if (!form.querySelector('input[name="vt_anon_id"]')) {
 			var input = document.createElement('input');
 			input.type = 'hidden';
-			input.name = 'sl_anon_id';
+			input.name = 'vt_anon_id';
 			input.value = anonId;
 			form.appendChild(input);
 		}
@@ -297,7 +297,7 @@
 			list.push(built.touch);
 			saveTouches(list);
 			if (cfg.debug && window.console) {
-				window.console.debug('[Sightline] touch recorded', built.touch);
+				window.console.debug('[Vantage] touch recorded', built.touch);
 			}
 		}
 
@@ -309,15 +309,15 @@
 		sync(anonId);
 
 		// Devtools inspection API.
-		window.Sightline = window.Sightline || {};
-		window.Sightline.getAnonId = getAnonId;
-		window.Sightline.getTouches = getTouches;
-		window.Sightline.getSentCount = getSentCount;
-		window.Sightline.getAttribution = getAttribution;
-		window.Sightline.fillFields = fillFields;
-		window.Sightline.sync = function () { sync(getAnonId()); };
-		window.Sightline.config = cfg;
-		window.Sightline.reset = function () {
+		window.Vantage = window.Vantage || {};
+		window.Vantage.getAnonId = getAnonId;
+		window.Vantage.getTouches = getTouches;
+		window.Vantage.getSentCount = getSentCount;
+		window.Vantage.getAttribution = getAttribution;
+		window.Vantage.fillFields = fillFields;
+		window.Vantage.sync = function () { sync(getAnonId()); };
+		window.Vantage.config = cfg;
+		window.Vantage.reset = function () {
 			try {
 				window.localStorage.removeItem(cfg.storageKey);
 				window.localStorage.removeItem(cfg.sentKey);
@@ -330,7 +330,7 @@
 		// Let add-ons (e.g. iframe attribution) know the API is ready.
 		try {
 			var ready = document.createEvent('Event');
-			ready.initEvent('sightline:ready', false, false);
+			ready.initEvent('vantage:ready', false, false);
 			document.dispatchEvent(ready);
 		} catch (e) {}
 	}

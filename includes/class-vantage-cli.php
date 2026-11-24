@@ -1,18 +1,18 @@
 <?php
 /**
- * WP-CLI commands for Sightline.
+ * WP-CLI commands for Vantage.
  *
- *   wp sightline seed --count=2000
- *   wp sightline clear
+ *   wp vantage seed --count=2000
+ *   wp vantage clear
  *
- * @package Sightline
+ * @package Vantage
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class Sightline_CLI {
+class Vantage_CLI {
 
 	/**
 	 * Seed synthetic attribution data.
@@ -24,29 +24,29 @@ class Sightline_CLI {
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp sightline seed
-	 *     wp sightline seed --count=5000
+	 *     wp vantage seed
+	 *     wp vantage seed --count=5000
 	 *
 	 * @param array $args       Positional args.
 	 * @param array $assoc_args Flags.
 	 */
 	public function seed( $args, $assoc_args ) {
 		$count   = isset( $assoc_args['count'] ) ? (int) $assoc_args['count'] : 2000;
-		$created = Sightline_Seeder::seed( $count );
+		$created = Vantage_Seeder::seed( $count );
 		WP_CLI::success( sprintf( 'Seeded %d visitors.', $created ) );
 	}
 
 	/**
-	 * Clear all Sightline data.
+	 * Clear all Vantage data.
 	 *
 	 * ## EXAMPLES
 	 *
-	 *     wp sightline clear
+	 *     wp vantage clear
 	 */
 	public function clear() {
-		Sightline_Seeder::clear();
-		WP_CLI::success( 'Cleared Sightline data.' );
+		Vantage_Seeder::clear();
+		WP_CLI::success( 'Cleared Vantage data.' );
 	}
 }
 
-WP_CLI::add_command( 'sightline', 'Sightline_CLI' );
+WP_CLI::add_command( 'vantage', 'Vantage_CLI' );
