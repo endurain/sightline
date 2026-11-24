@@ -39,8 +39,10 @@ other visitors. The server only defers; the browser fills.
 ### Reporting (Phase 4)
 
 ```
-GET /wp-json/vantage/v1/reports/{summary|conversions|attribution|sankey|traffic|dropoff}
-    common: start, end (YYYY-MM-DD, site tz), group_by=source|campaign, campaign
+GET /wp-json/vantage/v1/reports/{summary|conversions|attribution|sankey|traffic|dropoff|filters}
+    common: start, end (YYYY-MM-DD, site tz), group_by=source|campaign,
+            campaign (exact utm_campaign), channel (exact "source / medium")
+    filters: campaign + channel options in range, people counts (ignores filters)
     conversions: page, per_page   sankey: max_steps, include_nonconverters
     dropoff: quiet_days           auth: manage_options (cookie + X-WP-Nonce)
 

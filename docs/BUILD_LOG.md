@@ -98,6 +98,13 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 - **Report API** is admin-only (`manage_options`), GET, standard WP REST cookie
   auth, `Cache-Control: no-store`. Computed per request in PHP (0.12s for the
   2,000-visitor seed); pre-aggregation is the upgrade path if sites get large.
+- **Filters** (0.7.0, Phase 5). `campaign` (exact utm_campaign) and `channel`
+  (exact `source / medium` label, e.g. `google / cpc` or `(direct)`, independent
+  of `group_by`) keep a person if ANY of their touches matches, at any time; both
+  together = AND. So a filtered traffic row can count slightly fewer people than
+  the filter kept (traffic only counts in-range touches). `reports/filters` lists
+  the campaigns and channels on people active in range, with people counts, and
+  ignores the active filters so every option stays listed.
 
 ## Issues log
 
@@ -114,8 +121,8 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 9 | Iframes outside the main HTML response (added by page-builder JS) aren't deferred, so they may load twice | Known limit — documented; acceptable |
 | 10 | Reports load all touches for in-range people per request | Watch — fine at seed scale (0.12s); add caching or pre-aggregation if a real site is slow |
 | 11 | Seeder timestamps can run past "now": journeys start 1-90 days ago and each touch adds up to 10 days with no cap (current seed: 169 of 4,149 touches and 20 of 466 conversions are in the future, so default "last 90 days" reports drop them). Also `current_time('timestamp')` + `gmdate()` shifts seed times by the UTC offset on non-UTC sites (this site is UTC, so latent here) | Resolved 2026-11-24: gaps scale down to fit before now; `time()` replaces `current_time()`. Re-seeded: 0 future touches / conversions |
-| 12 | No report lists the campaigns / channels present in a date range, so dashboard filter dropdowns have no data source (deriving them from `traffic?group_by=campaign` labels would mean parsing display strings) | Open, Phase 5 |
-| 13 | No `source` / channel filter param on the reports (only `campaign`, exact match) | Open, Phase 5 (optional per brief) |
+| 12 | No report lists the campaigns / channels present in a date range, so dashboard filter dropdowns have no data source (deriving them from `traffic?group_by=campaign` labels would mean parsing display strings) | Resolved in 0.7.0: `reports/filters` (verified against raw SQL) |
+| 13 | No `source` / channel filter param on the reports (only `campaign`, exact match) | Resolved in 0.7.0: `channel` param on every report (verified against raw SQL) |
 | 14 | Sankey has no long-tail cap: `group_by=campaign` on the seed returns 67 nodes / 313 links (by source: 40 / 182; with non-converters: 42 / 286) | Open, Phase 5 |
 | 15 | Gravity Forms hook is wired but has never been run (paid plugin, not installed); README now says so | Open, **pre-ship**: test it or keep the claim softened |
 

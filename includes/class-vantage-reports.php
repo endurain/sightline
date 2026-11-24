@@ -109,6 +109,7 @@ class Vantage_Reports {
 			'end_utc'               => $end_l->setTimezone( $utc )->format( 'Y-m-d H:i:s' ),
 			'group_by'              => $group_by,
 			'campaign'              => isset( $args['campaign'] ) ? substr( sanitize_text_field( (string) $args['campaign'] ), 0, 191 ) : '',
+			'channel'               => isset( $args['channel'] ) ? substr( sanitize_text_field( (string) $args['channel'] ), 0, 191 ) : '',
 			'max_steps'             => self::clamp( isset( $args['max_steps'] ) ? $args['max_steps'] : 5, 2, 8 ),
 			'quiet_days'            => self::clamp( isset( $args['quiet_days'] ) ? $args['quiet_days'] : 14, 1, 365 ),
 			'page'                  => self::clamp( isset( $args['page'] ) ? $args['page'] : 1, 1, 100000 ),
@@ -138,6 +139,7 @@ class Vantage_Reports {
 			'timezone'     => wp_timezone_string(),
 			'group_by'     => $a['group_by'],
 			'campaign'     => '' === $a['campaign'] ? null : $a['campaign'],
+			'channel'      => '' === $a['channel'] ? null : $a['channel'],
 			'generated_at' => gmdate( 'c' ),
 		);
 	}
@@ -232,21 +234,89 @@ class Vantage_Reports {
 		}
 		unset( $p );
 
-		if ( '' !== $a['campaign'] ) {
+		// Filters keep a person if ANY of their touches matches (all filters must hold).
+		if ( '' !== $a['campaign'] || '' !== $a['channel'] ) {
 			$people = array_filter(
 				$people,
 				function ( $p ) use ( $a ) {
-					foreach ( $p['touches'] as $t ) {
-						if ( $t['campaign'] === $a['campaign'] ) {
-							return true;
+					foreach ( array( 'campaign', 'channel' ) as $f ) {
+						if ( '' === $a[ $f ] ) {
+							continue;
+						}
+						$hit = false;
+						foreach ( $p['touches'] as $t ) {
+							$value = 'campaign' === $f ? $t['campaign'] : self::base_channel( $t );
+							if ( $value === $a[ $f ] ) {
+								$hit = true;
+								break;
+							}
+						}
+						if ( ! $hit ) {
+							return false;
 						}
 					}
-					return false;
+					return true;
 				}
 			);
 		}
 
 		return $people;
+	}
+
+	/**
+	 * A classified touch's "source / medium" label (or "(direct)"), regardless
+	 * of group_by. This is what the `channel` filter matches against.
+	 *
+	 * @param array $t Classified touch.
+	 * @return string
+	 */
+	public static function base_channel( array $t ) {
+		return null === $t['source'] ? self::DIRECT : $t['source'] . ' / ' . $t['medium'];
+	}
+
+	/**
+	 * Filter options for the dashboard: campaigns and channels present on the
+	 * people active in the date range, with a people count each. Ignores the
+	 * campaign / channel filters themselves so every option stays listed.
+	 *
+	 * @param array $args Raw args.
+	 * @return array
+	 */
+	public static function filters( array $args = array() ) {
+		$args['campaign'] = '';
+		$args['channel']  = '';
+		$a                = self::parse_args( $args );
+		$campaigns        = array();
+		$channels         = array();
+		foreach ( self::load_people( $a ) as $p ) {
+			$seen_c = array();
+			$seen_h = array();
+			foreach ( $p['touches'] as $t ) {
+				if ( null !== $t['campaign'] ) {
+					$seen_c[ $t['campaign'] ] = true;
+				}
+				$seen_h[ self::base_channel( $t ) ] = true;
+			}
+			foreach ( array_keys( $seen_c ) as $c ) {
+				$campaigns[ $c ] = ( isset( $campaigns[ $c ] ) ? $campaigns[ $c ] : 0 ) + 1;
+			}
+			foreach ( array_keys( $seen_h ) as $h ) {
+				$channels[ $h ] = ( isset( $channels[ $h ] ) ? $channels[ $h ] : 0 ) + 1;
+			}
+		}
+		$rows = function ( array $counts, $key ) {
+			arsort( $counts );
+			$out = array();
+			foreach ( $counts as $value => $n ) {
+				$out[] = array( $key => (string) $value, 'people' => $n );
+			}
+			return $out;
+		};
+		return array(
+			'meta'      => self::meta( $a ),
+			'campaigns' => $rows( $campaigns, 'campaign' ),
+			'channels'  => $rows( $channels, 'channel' ),
+		);
 	}
 
 	private static function chunks( array $ids ) {
