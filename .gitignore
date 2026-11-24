@@ -7,6 +7,8 @@
 # Dependencies / build
 node_modules/
 vendor/
+# Bundled front-end libraries ARE part of the plugin (WP.org: no CDNs).
+!assets/vendor/
 *.zip
 
 # Local env
