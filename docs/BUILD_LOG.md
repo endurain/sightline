@@ -11,12 +11,12 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 1 | Client-side capture (framework-agnostic JS) | Done | Yes — getTouches() showed 2 touches, first preserved, dedupe ok |
 | 2 | REST ingestion endpoint + sink pattern | Done | Yes — POST /collect returned 200, `{"ok":true,"visitor_id":2002,"inserted":1}` |
 | 3 | Forms + identity resolution + iframe attribution | Done (pass 1 forms/identity, pass 2 iframe attribution) | Yes — pass 1: CF7 + WPForms; pass 2: 14/14 headless-Chrome checks with stubbed Pardot/HubSpot (2026-11-19). Not yet tried against a live Pardot/HubSpot account; Gravity Forms not tested |
-| 4 | Reporting backend (incl. traffic/drop-off) | Not started | — |
+| 4 | Reporting backend (incl. traffic/drop-off) | Done | Yes — 51/51 fixture assertions; all 423 seed conversions match raw SQL; REST auth/validation checked (2026-11-20) |
 | 5 | Admin dashboard (Sankey + traffic view) | Not started | — |
 | 6 | Privacy, settings, retention, deletion | Not started | — |
 | 7 | Hosted dashboard / SaaS | Parked | — |
 
-## Current version: 0.5.0
+## Current version: 0.6.0
 
 ## Decisions log
 
@@ -69,6 +69,35 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 - **Late-loading iframes and forms:** a MutationObserver handles iframes and forms
   added after load. A late allowlisted iframe that already has a `src` may load
   twice (once bare, once with params); only server-deferred iframes avoid that.
+- **Reports: person = hashed email.** (0.6.0) Visitor rows sharing a
+  `hashed_email` are one person in every report, so cross-device journeys merge
+  (issue #4). Stitching happens at read time; the tables are not rewritten.
+  Visitors with no hash are a person each. Reports never return the hash.
+- **Channel labels.** UTM touch: `source / medium` (lowercased; `· campaign`
+  appended with `group_by=campaign`). Click id with no UTMs: `google / (click id)`
+  etc. Referrer only: search engines -> `google / organic`, social sites ->
+  `facebook / social`, anything else -> `host / referral`; the site's own host
+  counts as direct. Nothing at all: `(direct)`.
+- **A conversion's path** = all of that person's touches at or before the
+  conversion time (touches before the date range included; touches after the
+  conversion excluded). Repeat conversions each get the full journey to that
+  point. A conversion with no touches gets `(no touch recorded)`.
+- **Attribution models:** first touch, last touch, linear, position-based
+  (40/40 to first/last, 20% split over the middle; 50/50 for two touches).
+- **Sankey:** consecutive repeat channels collapse (A A B -> A B); paths longer
+  than `max_steps` (default 5) keep the first touch + the last `max_steps-1`.
+  Node ids are `step|label` (unique per column, so no cycles); final node
+  `end|Converted`, plus `end|No conversion` with `include_nonconverters`.
+- **Traffic:** a person counts for a channel if they had a touch from it in range,
+  and as a converter for it if they converted in range at or after that touch.
+- **Drop-off:** people active in range, bucketed by all-time touch count (1..6+),
+  split converted (ever) / still active / went quiet (no touch for `quiet_days`,
+  default 14, and never converted). On-site behavior only.
+- **Date ranges** are whole days in the site timezone (default: last 90 days,
+  max ~2 years); every time returned is UTC ISO-8601.
+- **Report API** is admin-only (`manage_options`), GET, standard WP REST cookie
+  auth, `Cache-Control: no-store`. Computed per request in PHP (0.12s for the
+  2,000-visitor seed); pre-aggregation is the upgrade path if sites get large.
 
 ## Issues log
 
@@ -77,12 +106,13 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 1 | Chrome blocks console paste (self-XSS guard) during testing | Resolved — use Application > Storage panel, or type `allow pasting` |
 | 2 | Full-page caches can serve a stale REST nonce to anonymous visitors | Open — Phase 6, switch to a cache-friendly token |
 | 3 | anon_id hidden field injected at load only; forms added later (popups/AJAX) miss it | Resolved in 0.5.0 — `capture.js` MutationObserver prepares forms added after load (verified) |
-| 4 | Cross-device identity: same hashed_email on two anon_ids = two visitor rows | Open — stitch at reporting (Phase 4) or a later merge |
+| 4 | Cross-device identity: same hashed_email on two anon_ids = two visitor rows | Resolved in 0.6.0 at reporting — reports treat one hash as one person (verified with a two-device fixture). Rows stay separate in the DB by design |
 | 5 | CF7 conversions only hook `wpcf7_mail_sent`; if the notification email fails (`mail_failed`), the conversion is silently dropped (reproduced 2026-11-19) | Resolved in 0.4.1 — `Vantage_Forms` now also hooks `wpcf7_mail_failed`; verified a forced mail failure records the conversion |
 | 6 | Current CF7 (6.2+) requires PHP 8.3; Local test site runs PHP 8.2, so testing used CF7 6.1.4 | Note — bump site PHP to test against current CF7 |
 | 7 | Pass 1 never filled the `vt_first_*` / `vt_last_*` CRM fields the user guide promised; only `vt_anon_id` was injected | Resolved in 0.5.0 — `capture.js` `fillFields()` fills existing fields (verified on CF7 `[hidden]` fields) |
 | 8 | Iframe attribution only tested against stubbed Pardot/HubSpot responses | Open — verify with a real Pardot form (prefill from URL) and a HubSpot share link / embed before shipping |
 | 9 | Iframes outside the main HTML response (added by page-builder JS) aren't deferred, so they may load twice | Known limit — documented; acceptable |
+| 10 | Reports load all touches for in-range people per request | Watch — fine at seed scale (0.12s); add caching or pre-aggregation if a real site is slow |
 
 ## Test environment
 
@@ -162,11 +192,36 @@ running the Phase 3 checklist, then continue with Phase 3 pass 2 (iframe).
 - [ ] Real Pardot form with "prefill from URL" receives the values (issue #8).
 - [ ] Real HubSpot share link / embed receives the values (issue #8).
 
+### Phase 4 — reporting backend  — VERIFIED 2026-11-20
+Fixture test: six hand-built people in Jan 2020 inside a rolled-back transaction
+(51 assertions, all exact values). Seed test: every report against 2,000 seeded visitors.
+- [x] Conversions: first/last touch and full path per conversion; newest first;
+      pagination; post-conversion touches excluded; pre-range touches included.
+- [x] Cross-device: two visitor rows with one hash form one path (`devices: 2`).
+- [x] Repeat conversions by one person each get their own row.
+- [x] Classification: click id only, organic search, social, referral, internal
+      referrer (= direct), direct.
+- [x] Attribution: exact credit per model; each model sums to total conversions.
+- [x] Sankey: exact links; Converted node = conversions; `max_steps` truncation;
+      `include_nonconverters` adds "No conversion".
+- [x] Traffic: people/touches/first-touch/converters/avg touches/active days per
+      channel (incl. a touch after conversion not counted as converting).
+- [x] Drop-off: buckets by touch count; quiet vs still active; `quiet_days`.
+- [x] Summary: people, touches, conversions, rate, avg touches, median days, top paths.
+- [x] Filters: date range, swapped dates, invalid date, `campaign`, `group_by=campaign`.
+- [x] Seed data: all 423 in-range conversions' first/last touch and touch count
+      match an independent raw-SQL computation.
+- [x] Hashed email never appears in any report output.
+- [x] REST: anonymous 401, subscriber 403, unknown report 404, bad args 400,
+      admin 200 for all six reports; no PHP notices with `WP_DEBUG` on.
+
 ## Known gaps / next work
-- **Phase 3 is complete** (0.5.0). Before shipping, verify iframe attribution
-  against a live Pardot form and HubSpot form (issue #8).
-- **Open limits:** cross-device same-hash = two rows (issue #4, Phase 4);
-  stale nonce under page caching (issue #2, Phase 6).
+- **Phase 4 is complete** (0.6.0). Next: Phase 5 dashboard (Sankey + traffic
+  view) on top of `/wp-json/vantage/v1/reports/*`.
+- Before shipping, verify iframe attribution against a live Pardot form and
+  HubSpot form (issue #8).
+- **Open limits:** stale nonce under page caching (issue #2, Phase 6); report
+  performance on large sites (issue #10).
 - Then Phases 4 (reporting incl. traffic/drop-off), 5 (Sankey dashboard),
   6 (privacy/settings/retention/deletion), 7 (hosted, parked).
 

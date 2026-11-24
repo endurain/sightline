@@ -5,10 +5,11 @@ touches, stores them first-party, ties repeat visits to a hashed identity (email
 is hashed with a server-side pepper, then discarded), and will visualize the path
 to conversion.
 
-**Status: v0.5.0, Phases 0–3 built.** Capture, REST ingestion, form integration
-with identity resolution (CF7, Gravity Forms, WPForms), and iframe form attribution
-for Pardot/HubSpot embeds. Reporting and the dashboard (Phases 4–5) are next. See
-`docs/BUILD_LOG.md` for status and test results.
+**Status: v0.6.0, Phases 0–4 built.** Capture, REST ingestion, form integration
+with identity resolution (CF7, Gravity Forms, WPForms), iframe form attribution
+for Pardot/HubSpot embeds, and the reporting API (attribution, Sankey data,
+traffic and drop-off) at `/wp-json/vantage/v1/reports/*`. The admin dashboard
+(Phase 5) is next. See `docs/BUILD_LOG.md` for status and test results.
 
 ## Install (local testing)
 
@@ -45,7 +46,6 @@ for Pardot/HubSpot embeds. Reporting and the dashboard (Phases 4–5) are next. 
 
 ## What's next
 
-- Phase 4: reporting backend (incl. traffic/drop-off).
 - Phase 5: admin dashboard (Sankey + traffic view).
 - Phase 6: privacy, settings, retention, deletion.
 - Phase 7 (parked): hosted dashboard / SaaS.

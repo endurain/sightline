@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name:       Vantage
- * Plugin URI:        https://example.com/vantage
- * Description:       Privacy-first multi-touch attribution. Captures UTM/ad-click touches, stores them first-party, and visualizes the path to conversion. (Phase 3: forms, identity resolution, iframe attribution.)
- * Version:           0.5.0
+ * Plugin URI:        https://getcompario.com/vantage
+ * Description:       Privacy-first multi-touch attribution. Captures UTM/ad-click touches, stores them first-party, and visualizes the path to conversion. (Phase 4: reporting backend.)
+ * Version:           0.6.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Zac Sanders
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VANTAGE_VERSION', '0.5.0' );
+define( 'VANTAGE_VERSION', '0.6.0' );
 define( 'VANTAGE_DB_VERSION', '1' );
 define( 'VANTAGE_FILE', __FILE__ );
 define( 'VANTAGE_DIR', plugin_dir_path( __FILE__ ) );
@@ -35,11 +35,14 @@ require_once VANTAGE_DIR . 'includes/class-vantage-sinks.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-rest.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-forms.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-iframe.php';
+require_once VANTAGE_DIR . 'includes/class-vantage-reports.php';
+require_once VANTAGE_DIR . 'includes/class-vantage-rest-admin.php';
 
 Vantage_Capture::init();
 Vantage_REST::init();
 Vantage_Forms::init();
 Vantage_Iframe::init();
+Vantage_REST_Admin::init();
 
 if ( is_admin() ) {
 	require_once VANTAGE_DIR . 'admin/class-vantage-admin.php';

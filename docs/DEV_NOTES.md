@@ -36,6 +36,25 @@ iframe-attribution.js   appends vt_first/last_utm_source|medium|campaign, sets s
 Never put attribution into server-rendered HTML: it would be cached and served to
 other visitors. The server only defers; the browser fills.
 
+### Reporting (Phase 4)
+
+```
+GET /wp-json/vantage/v1/reports/{summary|conversions|attribution|sankey|traffic|dropoff}
+    common: start, end (YYYY-MM-DD, site tz), group_by=source|campaign, campaign
+    conversions: page, per_page   sankey: max_steps, include_nonconverters
+    dropoff: quiet_days           auth: manage_options (cookie + X-WP-Nonce)
+
+class-vantage-rest-admin  route + arg validation -> Vantage_Reports::{report}()
+class-vantage-reports     load_people(): people touched/converted in range, all
+                            their touches + conversions, stitched by hashed_email
+                            classify(): touch -> source/medium/campaign/channel
+                            journeys(): conversion + path (touches <= conversion)
+```
+
+Reports read the local tables directly (they are not on the ingestion path, so
+the sink rule doesn't apply). Never return `hashed_email` from a report.
+Sankey nodes: `{id: "step|label", label, step, value}`; links reference ids.
+
 ## Data model
 
 - `vt_visitors` — `id`, `anon_id` (unique), `hashed_email` (null until convert),
@@ -80,6 +99,8 @@ includes/
   class-vantage-rest.php            /collect endpoint
   class-vantage-forms.php           form hooks + identity resolution
   class-vantage-iframe.php          iframe deferral (output buffer) + settings helpers
+  class-vantage-reports.php         report computations (Phase 4)
+  class-vantage-rest-admin.php      admin-only /reports/* endpoints
   class-vantage-cli.php             wp vantage seed|clear
 admin/
   class-vantage-admin.php           admin page (counts, pepper, iframe settings, demo data)
