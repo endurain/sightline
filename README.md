@@ -6,7 +6,8 @@ is hashed with a server-side pepper, then discarded), and will visualize the pat
 to conversion.
 
 **Status: v0.6.0, Phases 0–4 built.** Capture, REST ingestion, form integration
-with identity resolution (CF7, Gravity Forms, WPForms), iframe form attribution
+with identity resolution (Contact Form 7 and WPForms verified; Gravity Forms
+wired but not yet verified), iframe form attribution
 for Pardot/HubSpot embeds, and the reporting API (attribution, Sankey data,
 traffic and drop-off) at `/wp-json/vantage/v1/reports/*`. The admin dashboard
 (Phase 5) is next. See `docs/BUILD_LOG.md` for status and test results.

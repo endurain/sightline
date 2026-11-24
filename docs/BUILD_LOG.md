@@ -110,28 +110,35 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 5 | CF7 conversions only hook `wpcf7_mail_sent`; if the notification email fails (`mail_failed`), the conversion is silently dropped (reproduced 2026-11-19) | Resolved in 0.4.1 — `Vantage_Forms` now also hooks `wpcf7_mail_failed`; verified a forced mail failure records the conversion |
 | 6 | Current CF7 (6.2+) requires PHP 8.3; Local test site runs PHP 8.2, so testing used CF7 6.1.4 | Note — bump site PHP to test against current CF7 |
 | 7 | Pass 1 never filled the `vt_first_*` / `vt_last_*` CRM fields the user guide promised; only `vt_anon_id` was injected | Resolved in 0.5.0 — `capture.js` `fillFields()` fills existing fields (verified on CF7 `[hidden]` fields) |
-| 8 | Iframe attribution only tested against stubbed Pardot/HubSpot responses | Open — verify with a real Pardot form (prefill from URL) and a HubSpot share link / embed before shipping |
+| 8 | Iframe attribution only tested against stubbed Pardot/HubSpot responses | Open, **pre-ship blocker**: verify with a real Pardot form (prefill from URL) and a HubSpot share link / embed before shipping |
 | 9 | Iframes outside the main HTML response (added by page-builder JS) aren't deferred, so they may load twice | Known limit — documented; acceptable |
 | 10 | Reports load all touches for in-range people per request | Watch — fine at seed scale (0.12s); add caching or pre-aggregation if a real site is slow |
+| 11 | Seeder timestamps can run past "now": journeys start 1-90 days ago and each touch adds up to 10 days with no cap (current seed: 169 of 4,149 touches and 20 of 466 conversions are in the future, so default "last 90 days" reports drop them). Also `current_time('timestamp')` + `gmdate()` shifts seed times by the UTC offset on non-UTC sites (this site is UTC, so latent here) | Open, found in Phase 5 smoke test (2026-11-24) |
+| 12 | No report lists the campaigns / channels present in a date range, so dashboard filter dropdowns have no data source (deriving them from `traffic?group_by=campaign` labels would mean parsing display strings) | Open, Phase 5 |
+| 13 | No `source` / channel filter param on the reports (only `campaign`, exact match) | Open, Phase 5 (optional per brief) |
+| 14 | Sankey has no long-tail cap: `group_by=campaign` on the seed returns 67 nodes / 313 links (by source: 40 / 182; with non-converters: 42 / 286) | Open, Phase 5 |
+| 15 | Gravity Forms hook is wired but has never been run (paid plugin, not installed); README now says so | Open, **pre-ship**: test it or keep the claim softened |
 
 ## Test environment
 
 - Local WordPress (Local by WP Engine), PHP 8.2. Contact Form 7 6.1.4 and
   WPForms Lite for form testing. Test pages: `/vantage-form-test/`,
-  `/vantage-wpforms-test/`, `/vantage-iframe-test/`.
+  `/vantage-wpforms-test/`, `/vantage-iframe-test/` (renamed from `/sightline-*/`
+  on 2026-11-24).
 - DB inspection via TablePlus / Adminer, or Local's bundled `mysql` + WP-CLI.
 - Browser tests: headless Chrome via puppeteer-core, with request interception
   stubbing Pardot/HubSpot/YouTube so iframe loads can be counted.
 
 ---
 
-## HANDOFF NOTE (2026-11-19)
+## Rename note (2026-11-24)
 
-Development continues in a code tool / IDE from here. Code of record: the
-`vantage/` plugin folder at version **0.4.0** (shipped as
-`vantage-phase3pass1.zip`). Everything below is built and lints clean; the
-Phase 3 pass-1 work is **built but NOT yet tested on a live site**. Start by
-running the Phase 3 checklist, then continue with Phase 3 pass 2 (iframe).
+The plugin was renamed Sightline to Vantage at v0.6.0 (prefix `sl_` to `vt_`).
+Historical names in this log were rewritten by the rename: the Phase 3 pass 1
+build shipped as `sightline-phase3pass1.zip`, and earlier test results refer to
+`wp_sl_*` tables and `sl_*` fields. The dev DB was not migrated: reactivation
+created fresh `wp_vt_*` tables and a new pepper, re-seeded. The old `wp_sl_*`
+tables and `sightline_*` options are still in the dev DB and can be dropped.
 
 ## Testing checklist (state of each item)
 
@@ -216,14 +223,15 @@ Fixture test: six hand-built people in Jan 2020 inside a rolled-back transaction
       admin 200 for all six reports; no PHP notices with `WP_DEBUG` on.
 
 ## Known gaps / next work
-- **Phase 4 is complete** (0.6.0). Next: Phase 5 dashboard (Sankey + traffic
-  view) on top of `/wp-json/vantage/v1/reports/*`.
-- Before shipping, verify iframe attribution against a live Pardot form and
-  HubSpot form (issue #8).
-- **Open limits:** stale nonce under page caching (issue #2, Phase 6); report
-  performance on large sites (issue #10).
-- Then Phases 4 (reporting incl. traffic/drop-off), 5 (Sankey dashboard),
-  6 (privacy/settings/retention/deletion), 7 (hosted, parked).
+- **Phase 4 is complete** (0.6.0). **Next: Phase 5** dashboard (Sankey + traffic
+  view) on top of `/wp-json/vantage/v1/reports/*`. Smoke test 2026-11-24: all six
+  reports return 200 in ~0.1s with the expected shapes; gaps logged as #11-#14.
+- **Pre-ship blockers:** live Pardot/HubSpot iframe test (#8); Gravity Forms
+  untested (#15).
+- **Open limits:** stale nonce under page caching (#2, Phase 6); report
+  performance on large sites (#10); CF7 6.2+ needs PHP 8.3 (#6).
+- After Phase 5: Phase 6 (privacy/settings/retention/deletion); Phase 7 (hosted)
+  stays parked.
 
 ## How to resume in a code tool
 Paste `BUILD_PLAN.md` (the phase you're on) + this `BUILD_LOG.md` into the tool
