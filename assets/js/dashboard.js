@@ -30,6 +30,14 @@
 		none: '#a7afb6',
 		salt: '#f6f5f2'
 	};
+	/*
+	 * Channel palette: color means "channel" everywhere on the dashboard. Fixed
+	 * hue order (validated against the salt surface: worst adjacent CVD dE 9.1,
+	 * normal-vision 19.6). Four hues are under 3:1 contrast, so channel identity
+	 * always also has a text label or the Table view; color assists, never carries.
+	 */
+	var CHANNEL_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
+	var SLOT_KEY = 'vantage.channelSlots.v1';
 	var MONO = 'ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
 	var SANKEY_KEEP = 7;          // channels shown by name; the rest fold into "Other"
 	var SANKEY_STEPS = 5;         // server max_steps
@@ -100,6 +108,70 @@
 		var p = ymd.split('-');
 		var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n));
 		return d.toISOString().slice(0, 10);
+	}
+
+	/* ------------------------------------------------------------ channel colors */
+
+	/*
+	 * A channel keeps its color: slots are assigned once (alphabetically, for
+	 * new channels) and remembered in localStorage, so filters and changing
+	 * counts never repaint anything. Which channels get one of the 8 colors is
+	 * decided from the date range's full channel list (reports/filters ignores
+	 * the campaign/channel filters); past 8, the 7 biggest keep a color and the
+	 * rest are "Other" gray. A channel that drops out keeps its slot unless a
+	 * newcomer needs it.
+	 */
+	var slots = readSlots();
+
+	function readSlots() {
+		try {
+			var v = JSON.parse(window.localStorage.getItem(SLOT_KEY) || '{}');
+			return v && typeof v === 'object' ? v : {};
+		} catch (e) {
+			return {};
+		}
+	}
+
+	function assignSlots(channelRows) {
+		var n = CHANNEL_PALETTE.length;
+		var colored = channelRows.map(function (r) { return r.channel; });
+		colored = colored.length > n ? colored.slice(0, n - 1) : colored;
+		var keep = {}, taken = {};
+		colored.forEach(function (ch) {
+			var s = slots[ch];
+			if (typeof s === 'number' && s >= 0 && s < n && !taken[s]) {
+				keep[ch] = s;
+				taken[s] = true;
+			}
+		});
+		var heldByAbsent = {};
+		Object.keys(slots).forEach(function (ch) {
+			if (keep[ch] === undefined) { heldByAbsent[slots[ch]] = true; }
+		});
+		var free = [];
+		for (var i = 0; i < n; i++) { if (!taken[i] && !heldByAbsent[i]) { free.push(i); } }
+		for (i = 0; i < n; i++) { if (!taken[i] && heldByAbsent[i]) { free.push(i); } }
+		colored.filter(function (ch) { return keep[ch] === undefined; }).sort().forEach(function (ch) {
+			var s = free.shift();
+			Object.keys(slots).forEach(function (other) { if (slots[other] === s) { delete slots[other]; } });
+			slots[ch] = s;
+			keep[ch] = s;
+		});
+		try { window.localStorage.setItem(SLOT_KEY, JSON.stringify(slots)); } catch (e) { /* private mode: in-memory only */ }
+		active = keep;
+	}
+	var active = {};
+
+	/** Color for a channel label; campaign-grouped labels use their base channel. */
+	function colorOf(label) {
+		if (label === OTHER) { return COLORS.other; }
+		var base = String(label).split(' · ')[0];
+		var s = active[base];
+		return s === undefined ? COLORS.other : CHANNEL_PALETTE[s];
+	}
+
+	function swatch(label) {
+		return h('span', { class: 'vt-swatch', 'aria-hidden': 'true', style: 'background:' + colorOf(label) });
 	}
 
 	/* ------------------------------------------------------------ state */
@@ -450,6 +522,7 @@
 	function render() {
 		fillSelect(ui.campaign, data.filters.campaigns, 'campaign', state.campaign, 'All campaigns');
 		fillSelect(ui.channel, data.filters.channels, 'channel', state.channel, 'All channels');
+		assignSlots(data.filters.channels);
 
 		var empty = data.summary.people === 0;
 		ui.empty.hidden = !empty;
@@ -483,7 +556,8 @@
 			{ label: 'Visitors', value: fmtInt(s.people), sub: plural(s.touches, 'touch', 'touches') + ' recorded' },
 			{ label: 'Conversions', value: fmtInt(s.conversions), sub: plural(s.converting_people, 'person', 'people') + ' converted' },
 			{ label: 'Conversion rate', value: fmtPct(s.conversion_rate), sub: 'of visitors in range' },
-			{ label: 'Touches per conversion', key: true, value: fmtDec(s.avg_touches_to_convert, 2), sub: 'median ' + fmtDec(s.median_days_to_convert, 1) + ' days to convert' },
+			{ label: 'Touches per conversion', key: true, value: fmtDec(s.avg_touches_to_convert, 2), sub: 'average per conversion' },
+			{ label: 'Days to convert', value: fmtDec(s.median_days_to_convert, 1), sub: 'median per conversion' },
 			{ label: 'Top converting path', path: true, value: top ? top.path : 'n/a', sub: top ? plural(top.conversions, 'conversion', 'conversions') : '' }
 		];
 		clear(ui.tiles);
@@ -561,9 +635,10 @@
 		var withNon = !!meta.include_nonconverters;
 
 		ui.sankeySub.textContent = 'Each column is one touch, in order. Width = ' + (withNon ? 'visitor paths' : 'conversions') +
-			' passing through (' + fmtInt(meta.paths) + ' paths). Repeat touches on the same channel are merged' +
-			(meta.truncated_paths ? '; ' + fmtInt(meta.truncated_paths) + ' paths over ' + meta.max_steps + ' touches keep the first and last ' + (meta.max_steps - 1) : '') +
-			(m.folded.length ? '. ' + m.folded.length + ' smaller channels are grouped as "Other"' : '') + '.';
+			' passing through (' + fmtInt(meta.paths) + ' paths). Repeat touches on the same channel are merged.' +
+			(meta.truncated_paths ? ' Paths longer than ' + meta.max_steps + ' touches (' + fmtInt(meta.truncated_paths) + ' of them) are shown as the first touch plus the last ' + (meta.max_steps - 1) + '.' : '') +
+			(m.folded.length ? ' ' + m.folded.length + ' smaller channels are grouped as "Other".' : '') +
+			' Hover a channel to trace it.';
 
 		var asTable = state.view === 'table';
 		ui.sankeyEl.style.display = asTable ? 'none' : '';
@@ -643,9 +718,9 @@
 				nodeAlign: 'justify',
 				layoutIterations: 0,      // keep our order: same channel, same rank, every column
 				draggable: false,
-				emphasis: { focus: 'adjacency', lineStyle: { opacity: 0.42 } },
-				blur: { lineStyle: { opacity: 0.05 }, itemStyle: { opacity: 0.35 }, label: { opacity: 0.45 } },
-				lineStyle: { color: COLORS.navy, opacity: 0.15, curveness: 0.5 },
+				emphasis: { focus: 'adjacency', lineStyle: { opacity: 0.75 } },
+				blur: { lineStyle: { opacity: 0.06 }, itemStyle: { opacity: 0.25 }, label: { opacity: 0.35 } },
+				lineStyle: { color: 'source', opacity: 0.45, curveness: 0.5 },
 				label: {
 					position: 'right',
 					distance: 6,
@@ -658,7 +733,7 @@
 					}
 				},
 				data: m.nodes.map(function (n) {
-					var color = n.step === 'end' ? (n.label === 'Converted' ? COLORS.orange : COLORS.none) : (n.label === OTHER ? COLORS.other : COLORS.navy);
+					var color = n.step === 'end' ? (n.label === 'Converted' ? COLORS.orange : COLORS.none) : colorOf(n.label);
 					return {
 						name: n.id,
 						value: n.value,
@@ -718,7 +793,7 @@
 		var rows = m.nodes.map(function (n) {
 			return h('tr', null, [
 				h('td', { text: colName(n.step, m.maxStep) }),
-				h('td', { style: 'text-align:left', text: n.label + (n.label === OTHER && n.members.length ? ' (' + n.members.join(', ') + ')' : '') }),
+				h('td', { style: 'text-align:left' }, [n.step === 'end' ? null : swatch(n.label), n.label + (n.label === OTHER && n.members.length ? ' (' + n.members.join(', ') + ')' : '')]),
 				h('td', { text: fmtInt(n.value) })
 			]);
 		});
@@ -743,7 +818,7 @@
 				return h('th', { text: md[1], title: a.models[md[0]] });
 			})))]),
 			h('tbody', null, rows.map(function (r) {
-				return h('tr', null, [h('td', { text: r.channel })].concat(models.map(function (md) {
+				return h('tr', null, [h('td', null, [swatch(r.channel), r.channel])].concat(models.map(function (md) {
 					return h('td', { class: r[md[0]] === max[md[0]] && r[md[0]] > 0 ? 'is-max' : '', text: fmtCredit(r[md[0]]) });
 				})));
 			}))
@@ -769,19 +844,19 @@
 				var chips = [];
 				steps.forEach(function (st, i) {
 					if (i) { chips.push(h('span', { class: 'vt-arrow', text: '→' })); }
-					chips.push(h('span', { class: 'vt-chip', text: st }));
+					chips.push(h('span', { class: 'vt-chip' }, [swatch(st), st]));
 				});
 				return h('tr', null, [
 					h('td', null, [h('div', { class: 'vt-path' }, chips)]),
-					h('td', { class: 'vt-barcell' }, [meter(r.conversions, max, fmtInt(r.conversions) + '  ' + fmtPct(r.conversions / (s.conversions || 1), 0), false,
+					h('td', { class: 'vt-barcell' }, [meter(r.conversions, max, fmtInt(r.conversions) + '  ' + fmtPct(r.conversions / (s.conversions || 1), 0), COLORS.navy,
 						[[fmtInt(r.conversions), 'conversions'], ['', r.path]])])
 				]);
 			}))
 		]));
 	}
 
-	function meter(value, max, label, quiet, tipLines) {
-		var fill = h('div', { class: 'vt-bar-fill' + (quiet ? ' is-quiet' : ''), style: 'width:' + (max ? (value / max) * 100 : 0).toFixed(2) + '%' });
+	function meter(value, max, label, color, tipLines) {
+		var fill = h('div', { class: 'vt-bar-fill', style: 'background:' + color + ';width:' + (max ? (value / max) * 100 : 0).toFixed(2) + '%' });
 		var track = h('div', { class: 'vt-bar-track' }, [fill]);
 		var el = h('div', { class: 'vt-bar' }, [track, h('span', { class: 'vt-bar-val vt-num', text: label })]);
 		if (tipLines) { withTip(track, tipLines); }
@@ -810,7 +885,7 @@
 			h('tbody', null, rows.map(function (r) {
 				return h('tr', null, [
 					h('td', { text: r.channel }),
-					h('td', { class: 'vt-barcell' }, [meter(r.people, maxPeople, fmtInt(r.people), false,
+					h('td', { class: 'vt-barcell' }, [meter(r.people, maxPeople, fmtInt(r.people), colorOf(r.channel),
 						[[fmtInt(r.people), 'visitors'], ['', r.channel + ' · ' + fmtInt(r.touches) + ' touches']])]),
 					h('td', { text: fmtInt(r.first_touch_people) }),
 					h('td', { text: fmtInt(r.converters) }),
@@ -820,6 +895,15 @@
 				]);
 			}))
 		]));
+
+		// The columns don't add up to the tiles by design; say so before anyone asks.
+		var people = data.summary.people;
+		var firstSum = rows.reduce(function (n, r) { return n + r.first_touch_people; }, 0);
+		var notInFirst = people - firstSum;
+		ui.traffic.appendChild(h('p', { class: 'vt-note', text: 'Visitors and Converted count a visitor once for every channel they touched, so those columns add up to more than the totals (' +
+			fmtInt(people) + ' visitors, ' + fmtInt(data.summary.converting_people) + ' converted).' }));
+		ui.traffic.appendChild(h('p', { class: 'vt-note', text: 'First touch counts visitors whose first-ever touch is inside the date range' +
+			(notInFirst > 0 ? ', so it sums to ' + fmtInt(firstSum) + ': the other ' + plural(notInFirst, 'visitor', 'visitors') + ' first arrived before the range starts.' : '.') }));
 	}
 
 	/* ------------------------------------------------------------ drop-off */
@@ -838,7 +922,7 @@
 
 		// Legend (names + totals), then the whole split as a tall segmented bar.
 		ui.drop.appendChild(h('ul', { class: 'vt-legend' }, STATES.map(function (s) {
-			return h('li', null, [h('span', { class: 'vt-swatch', style: 'background:var(--vt-d-' + (s[1] === 'c' ? 'converted' : s[1] === 'a' ? 'active' : 'quiet') + ')' }), s[2] + ' ', h('strong', { text: fmtInt(tot[s[0]]) })]);
+			return h('li', null, [h('span', { class: 'vt-swatch is-state ' + s[1] }), s[2] + ' ', h('strong', { text: fmtInt(tot[s[0]]) })]);
 		})));
 		var bar = h('div', { class: 'vt-seg-bar', role: 'img', 'aria-label': STATES.map(function (s) { return s[2] + ' ' + fmtInt(tot[s[0]]) + ' (' + fmtPct(tot[s[0]] / (tot.people || 1), 0) + ')'; }).join(', ') });
 		STATES.forEach(function (s) {
@@ -890,7 +974,7 @@
 			h('tbody', null, rows.map(function (r) {
 				return h('tr', null, [
 					h('td', { text: r.channel }),
-					h('td', { class: 'vt-barcell' }, [meter(r.people, max, fmtInt(r.people), true,
+					h('td', { class: 'vt-barcell' }, [meter(r.people, max, fmtInt(r.people), colorOf(r.channel),
 						[[fmtInt(r.people), 'went quiet'], ['', 'last seen via ' + r.channel]])]),
 					h('td', { text: fmtDec(r.avg_touches, 2) })
 				]);

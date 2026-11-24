@@ -16,7 +16,7 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 6 | Privacy, settings, retention, deletion | Not started | — |
 | 7 | Hosted dashboard / SaaS | Parked | — |
 
-## Current version: 0.7.0
+## Current version: 0.7.1
 
 ## Decisions log
 
@@ -102,17 +102,32 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
   Traffic & drop-off (traffic by channel, drop-off split, last channel before
   going quiet). Filters live in the URL hash, so a view can be bookmarked.
 - **Dashboard rendering.** Only the Sankey uses ECharts; everything else is
-  HTML/CSS (crisper, accessible, a table by construction). Sankey: one navy hue
-  for channel nodes, orange only on Converted; node order fixed (same channel,
-  same rank, every column; `layoutIterations: 0`); labels only where the node is
-  tall enough, truncated to the column width; full values in tooltips and the
-  Table toggle. Long tail: the 7 biggest channels by name, the rest "Other".
-- **Dashboard colors.** Brand navy `#122A3F` fails the categorical-fill gates
-  (too dark, too gray), so it stays for ink and chrome. Data colors were
-  validated against the salt surface `#F6F5F2`: converted `#1F5A8C`, still active
-  `#4E9FD8`, went quiet `#C2561F` (brand orange). Worst adjacent CVD dE 22.0,
-  normal-vision 22.1; still active is under 3:1 contrast, so every value is also
-  printed or in a table.
+  HTML/CSS (crisper, accessible, a table by construction). Sankey node order is
+  fixed (same channel, same rank, every column; `layoutIterations: 0`); labels
+  only where the node is tall enough, truncated to the column width; full values
+  in tooltips and the Table toggle. Long tail: the 7 biggest channels by name,
+  the rest "Other". Hover focuses the adjacent path (`focus: 'adjacency'`).
+- **Color means channel, everywhere** (0.7.1). Fixed 8-hue palette (blue,
+  orange, aqua, yellow, magenta, green, violet, red; validated on salt `#F6F5F2`:
+  worst adjacent CVD dE 9.1, normal-vision 19.6; four hues under 3:1, so every
+  channel also has a text label or the Table view). Used on Sankey nodes and
+  links (`color: 'source'`), traffic bars, "went quiet" bars, attribution
+  swatches and path chips. A channel's slot is assigned once (alphabetical for
+  newcomers) and remembered in localStorage, so filters never repaint; which
+  channels get a color comes from the range's unfiltered channel list; past 8,
+  the 7 biggest keep a color and the rest are "Other" gray. Under group by
+  campaign, a node takes its base channel's color.
+- **Reserved colors.** Brand orange `#C2561F` = the goal: Sankey Converted node
+  and drop-off "Converted". Drop-off states (validated, worst dE 22.0): converted
+  `#C2561F`, still active `#4E9FD8`, went quiet `#1F5A8C`. (0.7.0 had went quiet
+  in orange; swapped so orange always means converted.) Brand navy `#122A3F` fails
+  the categorical-fill gates (too dark, too gray): it stays for ink, chrome and
+  the top-paths bars (a path is not a channel).
+- **Traffic table notes.** Visitors and Converted count a visitor once per
+  channel touched, so columns exceed the totals; First touch only counts
+  visitors whose first-ever touch is in range (seed: sums to 1,962 of 1,985; the
+  other 23 first arrived before the window, verified in SQL). Both stated under
+  the table, with the live numbers.
 - **ECharts 6.1.0 bundled** in `assets/vendor/echarts/` (WP.org disallows CDN
   libraries), enqueued only on the dashboard screen (verified on four admin
   hooks). Apache-2.0 (GPLv3-compatible, so fine under GPL-2.0-or-later); the dist
@@ -272,6 +287,10 @@ Fixture test: six hand-built people in Jan 2020 inside a rolled-back transaction
       selects, tables and tooltips; no element injected, nothing executes.
 - [x] ECharts + dashboard assets load only on Vantage > Dashboard.
 - [x] No horizontal overflow at 900px wide.
+- [x] 0.7.1 punch-list: each channel has the same color in attribution swatches
+      and traffic bars; 8 channels get 8 distinct colors; a campaign filter
+      changes counts without repainting any channel; a 9th channel folds to gray.
+- [x] Tile values align across all six tiles at 1600 / 1440 / 1280px (subgrid).
 - [ ] Check in a real browser at your usual screen size (all checks so far ran
       headless).
 

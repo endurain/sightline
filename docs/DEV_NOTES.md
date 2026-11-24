@@ -71,6 +71,9 @@ dashboard.js  filters (URL hash) -> 6 parallel GETs (summary, sankey, attributio
 Vantage > Settings (vantage_page_vantage-settings)  the pre-0.7 admin page
 ```
 
+Channel colors: `CHANNEL_PALETTE` + `assignSlots()` / `colorOf()` in dashboard.js.
+Slots persist in localStorage (`vantage.channelSlots.v1`); never color by rank.
+
 Labels are visitor data: build DOM with `textContent` (the `h()` helper), and
 `esc()` anything handed to an ECharts tooltip formatter. Brand tokens and the
 validated data colors are CSS variables at the top of `dashboard.css`.

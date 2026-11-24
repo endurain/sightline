@@ -21,11 +21,12 @@
 	--vt-rule-strong: #cdc9bf;   /* baselines, control borders */
 	--vt-wash: #eeece7;          /* hover wash, bar tracks */
 
-	/* Data (validated set: converted / still active / went quiet) */
-	--vt-d-converted: #1f5a8c;
+	/* Visitor states (validated set). Brand orange is the reserved "goal"
+	   color: Converted, here and on the Sankey outcome node. Channel colors
+	   live in dashboard.js (CHANNEL_PALETTE). */
+	--vt-d-converted: #c2561f;
 	--vt-d-active: #4e9fd8;
-	--vt-d-quiet: #c2561f;
-	--vt-d-bar: #1f5a8c;         /* single-series bars */
+	--vt-d-quiet: #1f5a8c;
 
 	--vt-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 	--vt-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
@@ -190,13 +191,19 @@ body.toplevel_page_vantage .vt-dash-wrap { margin-top: 0; }
 
 .vt-tiles {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr)) minmax(0, 1.6fr);
+	grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(0, 1.5fr);
 	border-bottom: 1px solid var(--vt-rule);
 }
 .vt-tile {
-	padding: 20px 20px 18px;
+	padding: 20px 18px 18px;
 	border-right: 1px solid var(--vt-rule);
 	min-width: 0;
+	/* Label / value / sub share rows across tiles, so a wrapped label never
+	   knocks one value out of line with the rest. */
+	display: grid;
+	grid-row: span 3;
+	grid-template-rows: subgrid;
+	row-gap: 0;
 }
 .vt-tile:first-child { padding-left: 0; }
 .vt-tile:last-child { border-right: 0; }
@@ -204,10 +211,10 @@ body.toplevel_page_vantage .vt-dash-wrap { margin-top: 0; }
 	font-family: var(--vt-mono);
 	font-size: 10.5px;
 	text-transform: uppercase;
-	letter-spacing: 0.08em;
+	letter-spacing: 0.06em;
 	color: var(--vt-ink-3);
 	display: flex;
-	align-items: center;
+	align-items: flex-start;
 	gap: 6px;
 }
 .vt-tile-value {
@@ -228,8 +235,10 @@ body.toplevel_page_vantage .vt-dash-wrap { margin-top: 0; }
 	color: var(--vt-ink-2);
 }
 /* The multi-touch proof tile carries the accent. */
-.vt-tile.is-key .vt-tile-label::before {
+.vt-tile.is-key .vt-tile-label::before { /* the multi-touch proof */
 	content: "";
+	flex-shrink: 0;
+	margin-top: 3px;
 	width: 8px;
 	height: 8px;
 	border-radius: 2px;
@@ -386,11 +395,9 @@ body.toplevel_page_vantage .vt-dash-wrap { margin-top: 0; }
 	left: 0;
 	top: 0;
 	bottom: 0;
-	background: var(--vt-d-bar);
 	border-radius: 0 4px 4px 0;
 	min-width: 2px;
 }
-.vt-bar-fill.is-quiet { background: var(--vt-d-quiet); }
 .vt-bar-val { min-width: 4.5em; text-align: right; }
 
 /* Path chips */
@@ -421,7 +428,12 @@ body.toplevel_page_vantage .vt-dash-wrap { margin-top: 0; }
 	list-style: none;
 }
 .vt-legend li { display: flex; align-items: center; gap: 6px; margin: 0; }
-.vt-swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.vt-swatch { width: 8px; height: 8px; border-radius: 2px; display: inline-block; flex-shrink: 0; margin-right: 6px; vertical-align: 1px; }
+.vt-legend .vt-swatch { width: 10px; height: 10px; margin-right: 0; }
+.vt-swatch.is-state.c { background: var(--vt-d-converted); }
+.vt-swatch.is-state.a { background: var(--vt-d-active); }
+.vt-swatch.is-state.q { background: var(--vt-d-quiet); }
+.vt-chip .vt-swatch { margin-right: 5px; }
 .vt-legend strong { color: var(--vt-ink); font-weight: 600; }
 
 /* Tall segmented bar: totals. 28px, 4px corners, 2px surface gaps. */
@@ -502,6 +514,7 @@ body.toplevel_page_vantage .vt-dash-wrap { margin-top: 0; }
 	color: var(--vt-ink-3);
 	margin: 14px 0 0;
 }
+.vt-note + .vt-note { margin-top: 4px; }
 
 /* ---------------------------------------------------------------- Tooltip */
 
