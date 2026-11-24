@@ -76,7 +76,8 @@ class Vantage_Seeder {
 		$conversions_t = Vantage_Schema::table( 'conversions' );
 
 		$channels = self::channels();
-		$now      = current_time( 'timestamp' );
+		// Real UTC epoch: every stored time is written with gmdate() as UTC.
+		$now      = time();
 		$created  = 0;
 
 		for ( $i = 0; $i < $num_visitors; $i++ ) {
@@ -85,12 +86,25 @@ class Vantage_Seeder {
 			$start_days_ago = wp_rand( 1, 90 );
 			$first_seen_ts  = $now - ( $start_days_ago * DAY_IN_SECONDS ) - wp_rand( 0, DAY_IN_SECONDS );
 
-			// Build touch timestamps, each a bit later than the last.
-			$touch_times = array();
-			$cursor      = $first_seen_ts;
-			for ( $t = 0; $t < $num_touches; $t++ ) {
-				$touch_times[] = $cursor;
-				$cursor       += wp_rand( HOUR_IN_SECONDS, 10 * DAY_IN_SECONDS );
+			// Build touch timestamps, each a bit later than the last. If the
+			// journey would run past now, scale the gaps down to fit so no touch
+			// (or conversion) is ever in the future.
+			$gaps = array();
+			for ( $t = 1; $t < $num_touches; $t++ ) {
+				$gaps[] = wp_rand( HOUR_IN_SECONDS, 10 * DAY_IN_SECONDS );
+			}
+			$room = $now - $first_seen_ts - wp_rand( 0, HOUR_IN_SECONDS );
+			$span = array_sum( $gaps );
+			if ( $span > $room ) {
+				$scale = $room / $span;
+				foreach ( $gaps as &$g ) {
+					$g = max( MINUTE_IN_SECONDS, (int) floor( $g * $scale ) );
+				}
+				unset( $g );
+			}
+			$touch_times = array( $first_seen_ts );
+			foreach ( $gaps as $g ) {
+				$touch_times[] = end( $touch_times ) + $g;
 			}
 			$last_seen_ts = end( $touch_times );
 
