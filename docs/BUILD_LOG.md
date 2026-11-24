@@ -12,11 +12,11 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 2 | REST ingestion endpoint + sink pattern | Done | Yes — POST /collect returned 200, `{"ok":true,"visitor_id":2002,"inserted":1}` |
 | 3 | Forms + identity resolution + iframe attribution | Done (pass 1 forms/identity, pass 2 iframe attribution) | Yes — pass 1: CF7 + WPForms; pass 2: 14/14 headless-Chrome checks with stubbed Pardot/HubSpot (2026-11-19). Not yet tried against a live Pardot/HubSpot account; Gravity Forms not tested |
 | 4 | Reporting backend (incl. traffic/drop-off) | Done | Yes — 51/51 fixture assertions; all 423 seed conversions match raw SQL; REST auth/validation checked (2026-11-20) |
-| 5 | Admin dashboard (Sankey + traffic view) | Not started | — |
+| 5 | Admin dashboard (Sankey + traffic view) | Done | Yes: 23/23 headless-Chrome checks (tiles/Sankey/traffic match the API under every filter, fold keeps column totals, XSS probe inert) + 19/19 filter-API checks vs raw SQL (2026-11-24) |
 | 6 | Privacy, settings, retention, deletion | Not started | — |
 | 7 | Hosted dashboard / SaaS | Parked | — |
 
-## Current version: 0.6.0
+## Current version: 0.7.0
 
 ## Decisions log
 
@@ -95,6 +95,30 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
   default 14, and never converted). On-site behavior only.
 - **Date ranges** are whole days in the site timezone (default: last 90 days,
   max ~2 years); every time returned is UTC ISO-8601.
+- **Dashboard** (0.7.0, Phase 5). Vantage > Dashboard (`page=vantage`); the old
+  admin page moved to Vantage > Settings (`page=vantage-settings`). Filter row
+  (date presets + custom, campaign, channel, group by) above tiles and two
+  equal-weight tabs: Conversion paths (Sankey, credit by model, top paths) and
+  Traffic & drop-off (traffic by channel, drop-off split, last channel before
+  going quiet). Filters live in the URL hash, so a view can be bookmarked.
+- **Dashboard rendering.** Only the Sankey uses ECharts; everything else is
+  HTML/CSS (crisper, accessible, a table by construction). Sankey: one navy hue
+  for channel nodes, orange only on Converted; node order fixed (same channel,
+  same rank, every column; `layoutIterations: 0`); labels only where the node is
+  tall enough, truncated to the column width; full values in tooltips and the
+  Table toggle. Long tail: the 7 biggest channels by name, the rest "Other".
+- **Dashboard colors.** Brand navy `#122A3F` fails the categorical-fill gates
+  (too dark, too gray), so it stays for ink and chrome. Data colors were
+  validated against the salt surface `#F6F5F2`: converted `#1F5A8C`, still active
+  `#4E9FD8`, went quiet `#C2561F` (brand orange). Worst adjacent CVD dE 22.0,
+  normal-vision 22.1; still active is under 3:1 contrast, so every value is also
+  printed or in a table.
+- **ECharts 6.1.0 bundled** in `assets/vendor/echarts/` (WP.org disallows CDN
+  libraries), enqueued only on the dashboard screen (verified on four admin
+  hooks). Apache-2.0 (GPLv3-compatible, so fine under GPL-2.0-or-later); the dist
+  also embeds zrender and d3 parts (BSD-3-Clause). LICENSE, NOTICE,
+  LICENSE-zrender and LICENSE-d3 ship next to it. Full build (1.1 MB); a custom
+  sankey-only build is a later size optimization.
 - **Report API** is admin-only (`manage_options`), GET, standard WP REST cookie
   auth, `Cache-Control: no-store`. Computed per request in PHP (0.12s for the
   2,000-visitor seed); pre-aggregation is the upgrade path if sites get large.
@@ -123,7 +147,7 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 11 | Seeder timestamps can run past "now": journeys start 1-90 days ago and each touch adds up to 10 days with no cap (current seed: 169 of 4,149 touches and 20 of 466 conversions are in the future, so default "last 90 days" reports drop them). Also `current_time('timestamp')` + `gmdate()` shifts seed times by the UTC offset on non-UTC sites (this site is UTC, so latent here) | Resolved 2026-11-24: gaps scale down to fit before now; `time()` replaces `current_time()`. Re-seeded: 0 future touches / conversions |
 | 12 | No report lists the campaigns / channels present in a date range, so dashboard filter dropdowns have no data source (deriving them from `traffic?group_by=campaign` labels would mean parsing display strings) | Resolved in 0.7.0: `reports/filters` (verified against raw SQL) |
 | 13 | No `source` / channel filter param on the reports (only `campaign`, exact match) | Resolved in 0.7.0: `channel` param on every report (verified against raw SQL) |
-| 14 | Sankey has no long-tail cap: `group_by=campaign` on the seed returns 67 nodes / 313 links (by source: 40 / 182; with non-converters: 42 / 286) | Open, Phase 5 |
+| 14 | Sankey has no long-tail cap: `group_by=campaign` on the seed returns 67 nodes / 313 links (by source: 40 / 182; with non-converters: 42 / 286) | Resolved in 0.7.0: dashboard folds all but the 7 biggest channels into "Other" in every column (display only, column totals verified) |
 | 15 | Gravity Forms hook is wired but has never been run (paid plugin, not installed); README now says so | Open, **pre-ship**: test it or keep the claim softened |
 
 ## Test environment
@@ -229,16 +253,36 @@ Fixture test: six hand-built people in Jan 2020 inside a rolled-back transaction
 - [x] REST: anonymous 401, subscriber 403, unknown report 404, bad args 400,
       admin 200 for all six reports; no PHP notices with `WP_DEBUG` on.
 
+### Phase 5 — admin dashboard  — VERIFIED 2026-11-24 (headless Chrome, seed data)
+- [x] Smoke test: six reports return 200, ~0.1s each, shapes match the views.
+- [x] `reports/filters` + `channel` param: 19/19 checks against raw SQL.
+- [x] Seeder no longer writes future timestamps (#11); re-seeded.
+- [x] Dashboard renders both tabs with no console errors; Settings page intact.
+- [x] Tiles (visitors, conversions, rate, touches per conversion, top path)
+      equal the API for: no filter, campaign, campaign + channel, custom range.
+- [x] Sankey Converted total = API under a campaign filter; non-converters toggle
+      adds "No conversion"; node tooltip shows value + column.
+- [x] Group by campaign: long tail folds into "Other"; every column total in the
+      Table view equals the API's.
+- [x] Traffic rows follow the filters; drop-off segments show tooltips on hover
+      and keyboard focus.
+- [x] Filters, tab and view persist in the URL hash; editing the hash reloads.
+- [x] Empty state when filters match nobody; seed prompt when there is no data.
+- [x] XSS probe (`<img onerror>` campaign, `<b>` source) renders as text in
+      selects, tables and tooltips; no element injected, nothing executes.
+- [x] ECharts + dashboard assets load only on Vantage > Dashboard.
+- [x] No horizontal overflow at 900px wide.
+- [ ] Check in a real browser at your usual screen size (all checks so far ran
+      headless).
+
 ## Known gaps / next work
-- **Phase 4 is complete** (0.6.0). **Next: Phase 5** dashboard (Sankey + traffic
-  view) on top of `/wp-json/vantage/v1/reports/*`. Smoke test 2026-11-24: all six
-  reports return 200 in ~0.1s with the expected shapes; gaps logged as #11-#14.
+- **Phase 5 is complete** (0.7.0): dashboard at Vantage > Dashboard. **Next:
+  Phase 6** (privacy, settings, retention, deletion), which also owns #2.
 - **Pre-ship blockers:** live Pardot/HubSpot iframe test (#8); Gravity Forms
   untested (#15).
 - **Open limits:** stale nonce under page caching (#2, Phase 6); report
   performance on large sites (#10); CF7 6.2+ needs PHP 8.3 (#6).
-- After Phase 5: Phase 6 (privacy/settings/retention/deletion); Phase 7 (hosted)
-  stays parked.
+- Phase 7 (hosted) stays parked.
 
 ## How to resume in a code tool
 Paste `BUILD_PLAN.md` (the phase you're on) + this `BUILD_LOG.md` into the tool

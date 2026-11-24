@@ -5,12 +5,13 @@ touches, stores them first-party, ties repeat visits to a hashed identity (email
 is hashed with a server-side pepper, then discarded), and will visualize the path
 to conversion.
 
-**Status: v0.6.0, Phases 0–4 built.** Capture, REST ingestion, form integration
+**Status: v0.7.0, Phases 0–5 built.** Capture, REST ingestion, form integration
 with identity resolution (Contact Form 7 and WPForms verified; Gravity Forms
 wired but not yet verified), iframe form attribution
 for Pardot/HubSpot embeds, and the reporting API (attribution, Sankey data,
-traffic and drop-off) at `/wp-json/vantage/v1/reports/*`. The admin dashboard
-(Phase 5) is next. See `docs/BUILD_LOG.md` for status and test results.
+traffic and drop-off) at `/wp-json/vantage/v1/reports/*`, and the admin
+dashboard (Vantage > Dashboard: Sankey of the path to conversion, plus traffic
+and drop-off for visitors who never converted). See `docs/BUILD_LOG.md` for status and test results.
 
 ## Install (local testing)
 
@@ -45,8 +46,13 @@ traffic and drop-off) at `/wp-json/vantage/v1/reports/*`. The admin dashboard
   The plugin prefers the constant when present.
 - Changing the pepper breaks historical identity matching. Treat it as permanent.
 
+## Third-party code
+
+- Apache ECharts 6.1.0 (`assets/vendor/echarts/`), Apache-2.0, which embeds
+  zrender and parts of d3 (BSD-3-Clause). License and NOTICE files are in that
+  folder. Loaded only on the Vantage dashboard screen.
+
 ## What's next
 
-- Phase 5: admin dashboard (Sankey + traffic view).
 - Phase 6: privacy, settings, retention, deletion.
 - Phase 7 (parked): hosted dashboard / SaaS.

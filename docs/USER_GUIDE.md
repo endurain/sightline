@@ -82,6 +82,29 @@ HubSpot), add hidden fields with the CRM field names, e.g. in Contact Form 7:
 
 Vantage fills them automatically, including in forms that appear later (popups).
 
+## The dashboard
+
+Open **Vantage > Dashboard** in wp-admin.
+
+- **Filters** (top row) apply to everything below: date range, campaign, channel,
+  and whether channels are grouped by source or by source + campaign.
+- **Tiles:** visitors, conversions, conversion rate, **touches per conversion**
+  (how many touches it really takes; single-touch tools can't show this), and the
+  top converting path.
+- **Conversion paths:** the Sankey shows each conversion's touches in order, left
+  to right. Hover a node or flow for exact numbers; **Table** shows the same data
+  as a table. **+ Non-converters** adds the visitors who didn't convert. Below it:
+  how much credit each channel gets under four attribution models, and the most
+  common exact paths.
+- **Traffic & drop-off:** every visitor, not just converters. Where traffic
+  enters, how visitors split into converted / still active / went quiet by number
+  of touches, and the last channel people saw before they went quiet.
+
+Vantage only sees what happens on your site, so "went quiet" means "stopped
+visiting", not "went to a competitor".
+
+Settings (iframe attribution, demo data) are under **Vantage > Settings**.
+
 ## Privacy
 
 - Email addresses are never stored. Only a one-way fingerprint is kept.

@@ -57,6 +57,24 @@ Reports read the local tables directly (they are not on the ingestion path, so
 the sink rule doesn't apply). Never return `hashed_email` from a report.
 Sankey nodes: `{id: "step|label", label, step, value}`; links reference ids.
 
+### Dashboard (Phase 5)
+
+```
+Vantage > Dashboard (toplevel_page_vantage)   Vantage_Admin::render_dashboard(): mount point
+  enqueue (this hook only): dashboard.css, vendor/echarts, dashboard.js
+  window.VantageDashboard = { api, nonce, today, timezone, settingsUrl }
+dashboard.js  filters (URL hash) -> 6 parallel GETs (summary, sankey, attribution,
+              traffic, dropoff, filters) -> tiles + two tabs
+              Sankey: foldSankey() keeps the 7 biggest channels, rest -> "Other"
+              (sums only); fixed node order; labels by node height
+              everything else: HTML/CSS tables + bars, shared .vt-tip tooltip
+Vantage > Settings (vantage_page_vantage-settings)  the pre-0.7 admin page
+```
+
+Labels are visitor data: build DOM with `textContent` (the `h()` helper), and
+`esc()` anything handed to an ECharts tooltip formatter. Brand tokens and the
+validated data colors are CSS variables at the top of `dashboard.css`.
+
 ## Data model
 
 - `vt_visitors` — `id`, `anon_id` (unique), `hashed_email` (null until convert),
@@ -105,10 +123,15 @@ includes/
   class-vantage-rest-admin.php      admin-only /reports/* endpoints
   class-vantage-cli.php             wp vantage seed|clear
 admin/
-  class-vantage-admin.php           admin page (counts, pepper, iframe settings, demo data)
+  class-vantage-admin.php           Dashboard page + Settings page (counts, pepper,
+                                      iframe settings, demo data); scoped enqueue
 assets/js/
   capture.js                          framework-agnostic capture + form prep
   iframe-attribution.js               framework-agnostic iframe src rewrite + HubSpot fill
+  dashboard.js                        admin dashboard (Phase 5)
+assets/css/
+  dashboard.css                       dashboard styles + brand tokens
+assets/vendor/echarts/                ECharts 6.1.0 + LICENSE/NOTICE files
 docs/                                 this folder
 ```
 

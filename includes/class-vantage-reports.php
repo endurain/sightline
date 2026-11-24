@@ -844,7 +844,7 @@ class Vantage_Reports {
 
 		return array(
 			'meta'                 => self::meta( $a ) + array( 'quiet_days' => $a['quiet_days'] ),
-			'note'                 => 'On-site behavior only. "Went quiet" = no touch in the last quiet_days and never converted.',
+			'note'                 => sprintf( 'On-site behavior only. "Went quiet" = no touch in the last %d days and never converted.', $a['quiet_days'] ),
 			'totals'               => $totals,
 			'by_touch_count'       => array_values( $buckets ),
 			'quiet_by_last_channel' => $quiet,

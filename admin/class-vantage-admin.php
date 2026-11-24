@@ -1,7 +1,12 @@
 <?php
 /**
- * Admin screen: table counts, pepper status, iframe form attribution settings,
- * and the seed / clear demo-data controls.
+ * Admin screens.
+ *
+ *   Vantage > Dashboard  (page=vantage)           Phase 5 attribution dashboard;
+ *                                                 rendered by assets/js/dashboard.js
+ *                                                 from the /reports/* REST API.
+ *   Vantage > Settings   (page=vantage-settings)  table counts, pepper status, iframe
+ *                                                 form attribution, demo data.
  *
  * @package Vantage
  */
@@ -14,10 +19,13 @@ class Vantage_Admin {
 
 	public static function init() {
 		add_action( 'admin_menu', array( __CLASS__, 'menu' ) );
+		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue' ) );
 		add_action( 'admin_post_vantage_seed', array( __CLASS__, 'handle_seed' ) );
 		add_action( 'admin_post_vantage_clear', array( __CLASS__, 'handle_clear' ) );
 		add_action( 'admin_post_vantage_save_iframe', array( __CLASS__, 'handle_save_iframe' ) );
 	}
+
+	const DASHBOARD_HOOK = 'toplevel_page_vantage';
 
 	public static function menu() {
 		add_menu_page(
@@ -25,10 +33,54 @@ class Vantage_Admin {
 			'Vantage',
 			'manage_options',
 			'vantage',
-			array( __CLASS__, 'render' ),
+			array( __CLASS__, 'render_dashboard' ),
 			'dashicons-chart-line',
 			58
 		);
+		add_submenu_page( 'vantage', 'Vantage dashboard', 'Dashboard', 'manage_options', 'vantage', array( __CLASS__, 'render_dashboard' ) );
+		add_submenu_page( 'vantage', 'Vantage settings', 'Settings', 'manage_options', 'vantage-settings', array( __CLASS__, 'render' ) );
+	}
+
+	/**
+	 * Dashboard assets, on the dashboard screen ONLY (ECharts is ~1.1 MB).
+	 *
+	 * @param string $hook Current admin page hook suffix.
+	 */
+	public static function enqueue( $hook ) {
+		if ( self::DASHBOARD_HOOK !== $hook ) {
+			return;
+		}
+		wp_enqueue_style( 'vantage-dashboard', VANTAGE_URL . 'assets/css/dashboard.css', array(), VANTAGE_VERSION );
+		// Bundled locally (WP.org disallows CDN libraries). Apache-2.0; see assets/vendor/echarts/.
+		wp_enqueue_script( 'vantage-echarts', VANTAGE_URL . 'assets/vendor/echarts/echarts.min.js', array(), '6.1.0', true );
+		wp_enqueue_script( 'vantage-dashboard', VANTAGE_URL . 'assets/js/dashboard.js', array( 'vantage-echarts' ), VANTAGE_VERSION, true );
+		wp_localize_script(
+			'vantage-dashboard',
+			'VantageDashboard',
+			array(
+				'api'         => esc_url_raw( rest_url( Vantage_REST::NAMESPACE . '/reports/' ) ),
+				'nonce'       => wp_create_nonce( 'wp_rest' ),
+				'today'       => wp_date( 'Y-m-d' ),
+				'timezone'    => wp_timezone_string(),
+				'settingsUrl' => esc_url_raw( admin_url( 'admin.php?page=vantage-settings' ) ),
+			)
+		);
+	}
+
+	public static function render_dashboard() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+		// The whole UI is built by dashboard.js; this is the mount point plus a
+		// no-JS fallback.
+		?>
+		<div class="wrap vt-dash-wrap">
+			<h1 class="screen-reader-text">Vantage dashboard</h1>
+			<div id="vt-dash" class="vt-dash">
+				<noscript><p>The Vantage dashboard needs JavaScript.</p></noscript>
+			</div>
+		</div>
+		<?php
 	}
 
 	/**
@@ -69,8 +121,8 @@ class Vantage_Admin {
 		$iframe_domains = Vantage_Iframe::domains();
 		?>
 		<div class="wrap">
-			<h1>Vantage</h1>
-			<p><em>Phase 3 — capture, ingestion, forms, and iframe attribution.</em></p>
+			<h1>Vantage settings</h1>
+			<p><a href="<?php echo esc_url( admin_url( 'admin.php?page=vantage' ) ); ?>">&larr; Back to the dashboard</a></p>
 
 			<h2>Database</h2>
 			<table class="widefat striped" style="max-width:420px">
@@ -174,7 +226,7 @@ class Vantage_Admin {
 		wp_safe_redirect(
 			add_query_arg(
 				array(
-					'page'   => 'vantage',
+					'page'   => 'vantage-settings',
 					'seeded' => $created,
 				),
 				admin_url( 'admin.php' )
@@ -198,7 +250,7 @@ class Vantage_Admin {
 		wp_safe_redirect(
 			add_query_arg(
 				array(
-					'page'         => 'vantage',
+					'page'         => 'vantage-settings',
 					'iframe_saved' => 1,
 				),
 				admin_url( 'admin.php' )
@@ -218,7 +270,7 @@ class Vantage_Admin {
 		wp_safe_redirect(
 			add_query_arg(
 				array(
-					'page'    => 'vantage',
+					'page'    => 'vantage-settings',
 					'cleared' => 1,
 				),
 				admin_url( 'admin.php' )
