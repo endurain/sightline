@@ -262,6 +262,13 @@
 		return el;
 	}
 
+	function tzLabel() {
+		var tz = CFG.timezone || 'UTC';
+		if (CFG.tzNamed) { return tz; }
+		var utc = tz === '+00:00' ? 'UTC' : 'UTC' + tz;
+		return utc + ' (fixed offset, no daylight saving)';
+	}
+
 	/* ------------------------------------------------------------ skeleton */
 
 	var ui = {};
@@ -276,7 +283,13 @@
 				h('span', { class: 'vt-tag', text: 'Multi-touch attribution' })
 			]),
 			h('div', { class: 'vt-head-meta' }, [
-				h('span', { text: 'tz ' + (CFG.timezone || 'UTC') }),
+				// Every date range is whole days in the site timezone; say which
+				// one, so numbers can be lined up with GA4 / the CRM (risk #5).
+				h('a', {
+					href: CFG.tzUrl,
+					title: 'Date ranges are whole days in this timezone. Match it to your GA4 property and CRM so daily numbers line up. Change it in Settings > General.',
+					text: 'Timezone: ' + tzLabel()
+				}),
 				h('a', { href: CFG.settingsUrl, text: 'Settings' })
 			])
 		]));

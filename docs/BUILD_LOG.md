@@ -15,8 +15,9 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 5 | Admin dashboard (Sankey + traffic view) | Done | Yes: 23/23 headless-Chrome checks (tiles/Sankey/traffic match the API under every filter, fold keeps column totals, XSS probe inert) + 19/19 filter-API checks vs raw SQL (2026-11-24) |
 | 6 | Privacy, settings, retention, deletion | Not started | — |
 | 7 | Hosted dashboard / SaaS | Parked | — |
+| T1 | Risk register Tier 1 (#1-#6): cache, Safari, click ids, bots, timezone, spoofing | Done (0.8.0) | Yes: 82 server + 30 HTTP + 17 browser checks (2026-11-24); limits logged as #16-#27 |
 
-## Current version: 0.7.1
+## Current version: 0.8.0
 
 ## Decisions log
 
@@ -41,7 +42,44 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
   Admin toggle, off by default.
 - **Code protection.** Client plugin is GPL/copyable by nature; the moat is the
   server-side logic + hosted service + data, not the plugin code.
-- **Endpoint protection.** REST nonce + light per-IP rate limit.
+- **Endpoint protection.** (0.8.0, replaces nonce.) No nonce: a nonce baked into a
+  full-page-cached page goes stale and WP core rejects the request (403) before
+  Vantage runs, silently dropping anonymous traffic. Instead: Origin (or Referer)
+  must be this site; bots and prefetch dropped (200, nothing stored); anon_id must
+  be a UUID v4; landing_url must be on this site; touch time clamped to
+  [now - 30 days, now]; 20 touches per request; 100 touches per visitor per day;
+  600 requests per IP per minute. Honest limit: a script forging Origin and a
+  browser UA is accepted (anything a browser can send, a script can).
+- **Cache and optimizers.** capture.js and its inline config carry `nowprocket`,
+  `data-no-optimize`, `data-no-defer`, `data-noptimize`, `data-cfasync="false"`
+  so "delay JS until interaction" doesn't skip bounced visitors.
+- **Identity on Safari.** /collect re-sets `vt_anon` with HTTP Set-Cookie (365
+  days, host-only, path /, SameSite=Lax, readable by JS). ITP's 7-day cap applies
+  to cookies created by `document.cookie`, not to first-party server cookies.
+- **Bots.** Server: user-agent filter (`Vantage_Bots`, filterable) chosen so
+  in-app browsers (Facebook, Instagram, LinkedIn, X, TikTok, Snapchat, Gmail app)
+  pass; `Sec-Purpose`/`Purpose: prefetch` dropped. Client: skip when
+  `navigator.webdriver`; wait for `prerenderingchange` on prerendered pages.
+  Link unfurlers never run JS, so they never created touches.
+- **Click ids** (0.8.0) map to what they prove: gclid / wbraid / gbraid ->
+  `google / cpc`, dclid -> `google / display`, msclkid -> `bing / cpc`, other
+  ad-platform ids -> `<platform> / cpc`. fbclid -> `facebook / social` (Facebook
+  adds it to organic clicks too). UTMs win; a missing utm_medium is filled from a
+  same-source click id.
+- **Return visits from other sites are touches** (0.8.0). Before, a no-UTM visit
+  was only recorded on the first ever visit, so later organic / social / referral
+  returns were lost. Now any visit with an external referrer is a touch (client
+  and server dedupe compare referrer host when there are no UTMs). Payment and
+  sign-in returns (PayPal, Stripe, Google/Apple/Microsoft sign-in) are excluded;
+  add more with the `vantage_ignore_referrers` filter.
+- **Referrer classification order** (0.8.0): Android app ids first (Gmail ->
+  email, Google app -> organic, YouTube -> social), then webmail hosts (email),
+  then Google's non-search subdomains (docs, drive, accounts... -> referral), then
+  search engines. Before, any host containing "google" was organic search.
+- **Timezone.** All date ranges are whole days in the site timezone (verified in
+  America/New_York across the Nov 1 DST change against an independent count);
+  durations are timezone-free. The dashboard header names the timezone and links
+  to Settings > General.
 - **CF7 conversion = valid submission, not delivered email.** Conversions are
   recorded on both `wpcf7_mail_sent` and `wpcf7_mail_failed` (CF7 fires exactly
   one). A broken mail setup on the host must not erase attribution. (0.4.1)
@@ -74,8 +112,8 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
   (issue #4). Stitching happens at read time; the tables are not rewritten.
   Visitors with no hash are a person each. Reports never return the hash.
 - **Channel labels.** UTM touch: `source / medium` (lowercased; `· campaign`
-  appended with `group_by=campaign`). Click id with no UTMs: `google / (click id)`
-  etc. Referrer only: search engines -> `google / organic`, social sites ->
+  appended with `group_by=campaign`). Click id with no UTMs: see "Click ids"
+  below (0.8.0; was `google / (click id)`). Referrer only: search engines -> `google / organic`, social sites ->
   `facebook / social`, anything else -> `host / referral`; the site's own host
   counts as direct. Nothing at all: `(direct)`.
 - **A conversion's path** = all of that person's touches at or before the
@@ -150,7 +188,7 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | # | Issue | Status |
 |---|-------|--------|
 | 1 | Chrome blocks console paste (self-XSS guard) during testing | Resolved — use Application > Storage panel, or type `allow pasting` |
-| 2 | Full-page caches can serve a stale REST nonce to anonymous visitors | Open — Phase 6, switch to a cache-friendly token |
+| 2 | Full-page caches can serve a stale REST nonce to anonymous visitors | Resolved in 0.8.0: no nonce on ingestion; verified with a static cached copy (stale nonce baked in) served to two visitors |
 | 3 | anon_id hidden field injected at load only; forms added later (popups/AJAX) miss it | Resolved in 0.5.0 — `capture.js` MutationObserver prepares forms added after load (verified) |
 | 4 | Cross-device identity: same hashed_email on two anon_ids = two visitor rows | Resolved in 0.6.0 at reporting — reports treat one hash as one person (verified with a two-device fixture). Rows stay separate in the DB by design |
 | 5 | CF7 conversions only hook `wpcf7_mail_sent`; if the notification email fails (`mail_failed`), the conversion is silently dropped (reproduced 2026-11-19) | Resolved in 0.4.1 — `Vantage_Forms` now also hooks `wpcf7_mail_failed`; verified a forced mail failure records the conversion |
@@ -164,6 +202,18 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 13 | No `source` / channel filter param on the reports (only `campaign`, exact match) | Resolved in 0.7.0: `channel` param on every report (verified against raw SQL) |
 | 14 | Sankey has no long-tail cap: `group_by=campaign` on the seed returns 67 nodes / 313 links (by source: 40 / 182; with non-converters: 42 / 286) | Resolved in 0.7.0: dashboard folds all but the 7 biggest channels into "Other" in every column (display only, column totals verified) |
 | 15 | Gravity Forms hook is wired but has never been run (paid plugin, not installed); README now says so | Open, **pre-ship**: test it or keep the claim softened |
+| 16 | Optimizer exclusion attributes (`nowprocket` etc.) not verified against real WP Rocket / LiteSpeed / Perfmatters / Cloudflare Rocket Loader | Open: install one, enable delay-JS, confirm capture runs without interaction |
+| 17 | Server-set cookie not verified on real Safari (no Safari automation here) | Open: Safari, visit, check cookie expiry in Web Inspector > Storage |
+| 18 | Safari can wipe localStorage after 7 idle days: the client touch list resets, so `vt_first_*` CRM fields report the post-wipe first touch and the return visit is recorded as a "first visit" (direct) touch. Server history is intact | Open: read first touch from the server or keep it in the server cookie |
+| 19 | Per-IP rate limit uses REMOTE_ADDR. Behind a CDN/proxy that the host doesn't unwrap, every visitor shares the CDN IP's 600/min bucket and busy sites drop touches. Trusting X-Forwarded-For would make it spoofable | Open: trusted-proxy setting |
+| 20 | /collect accepts scripted requests that forge Origin + a browser UA; rotating ids/IPs can inject fake visitors at volume (each id capped at 100/day) | Known limit, documented. Later: anomaly flags, hosted ingestion |
+| 21 | Bots that run JS with a normal UA and no webdriver flag are not filtered | Open: behavioral heuristics (no interaction, impossible timing) |
+| 22 | Origin under `Referrer-Policy: no-referrer` verified in Chrome only (Chrome still sends it; spec says "null"). capture.js pins `referrerPolicy: same-origin` as a guard | Open: confirm in Firefox and Safari |
+| 23 | Some lost referrers are unfixable client-side: HTTPS -> HTTP downgrade, in-app browsers and email clients that strip referrers, no UTMs. These land in (direct) | Known limit, documented (use UTMs on owned links) |
+| 24 | fbclid-only clicks are `facebook / social`: paid vs organic can't be told apart without UTMs | Known limit, documented (tag Meta ads with UTMs) |
+| 25 | The referral exclusion list is a starting set; checkout, booking and SSO hosts differ per site | Documented: `vantage_ignore_referrers` filter |
+| 26 | Return visits from other sites were not captured before 0.8.0, so earlier data under-counts organic / social / referral touches; cannot be backfilled | Known, historic only |
+| 27 | Vantage can't detect a GA4 / CRM timezone mismatch; the dashboard names the site timezone and links to the setting | Documented |
 
 ## Test environment
 
@@ -294,13 +344,52 @@ Fixture test: six hand-built people in Jan 2020 inside a rolled-back transaction
 - [ ] Check in a real browser at your usual screen size (all checks so far ran
       headless).
 
+### Risk register Tier 1 (#1-#6): VERIFIED 2026-11-24 (0.8.0)
+Each fix was attacked, not just exercised. Server checks (PHP, 82), HTTP against
+the live endpoint (30), headless Chrome (17); dashboard (26) and filter (19)
+suites re-run green. Test rows tagged `vt_selftest`, removed after.
+- [x] #1 No-nonce POST accepted; a stale nonce header is still a WP-core 403 (why
+      capture.js never sends one); page HTML has no nonce; a static cached copy
+      with a stale nonce injected records two distinct visitors; logged-in admin
+      on the front end records; optimizer-exclusion attributes on both tags.
+- [x] #2 /collect Set-Cookie: same id, ~365 days, path /, SameSite=Lax, not
+      HttpOnly, host-only; the browser ends up with exactly one vt_anon.
+- [x] #3 gclid / wbraid / msclkid / dclid / fbclid / mixed-UTM cases; empty,
+      unknown and malformed click ids; 18 referrer cases (webmail, Android apps,
+      Google non-search subdomains, real search engines, lookalike hosts). Browser:
+      first, Google, reload, PayPal return, internal, direct return, HN, gclid
+      sequence records exactly first + Google + HN + gclid.
+- [x] #4 19 bot UAs flagged, 20 human UAs (in-app browsers, TV, console) not;
+      bot and prefetch POSTs store nothing; Slack/Facebook/WhatsApp/Twitter unfurls
+      create no touch; webdriver browser sends nothing; a prerendered page records
+      nothing until opened, then exactly one touch.
+- [x] #5 New York: four days incl. the 25-hour DST day match an independent count;
+      boundaries 04:00Z / 04:59:59Z; default range ends on New York's today;
+      durations identical in Tokyo and New York; timezone option restored.
+- [x] #6 No/foreign/lookalike Origin 403; Referer fallback; malformed and
+      injection-shaped ids 400; foreign and javascript: landing URLs dropped;
+      future and 2020 times clamped, 3-day backlog kept; 20 per request; 100 per
+      visitor per day; non-scalar fields; tags stripped; different-origin page
+      (fetch, no-cors fetch, sendBeacon) stores nothing; Referrer-Policy
+      no-referrer page still records. LIMIT confirmed: forged Origin + UA gets in.
+- [x] Regression: CF7 conversion with hidden CRM fields, 64-char hash, raw email
+      in no Vantage table.
+- Found and fixed while proving: any "google" host (Gmail, Docs, the YouTube app)
+  counted as organic search; server dedupe dropped referral touches; return visits
+  from other sites were never captured; the CF7 test form still used `sl_` field
+  names (rename leftover, fixed in the dev DB).
+
 ## Known gaps / next work
-- **Phase 5 is complete** (0.7.0): dashboard at Vantage > Dashboard. **Next:
-  Phase 6** (privacy, settings, retention, deletion), which also owns #2.
+- **Phase 5 is complete** (0.7.0) and **Tier 1 of the risk register** (0.8.0).
+  **Next:** Phase 6 (privacy, settings, retention, deletion), or the register's
+  quick wins (#17 UTM case-normalizing) and Tier 4 (#20 PII in URLs, #21 consent).
+- **Revisit list from Tier 1:** #16-#22 open (real-plugin and real-Safari checks,
+  localStorage wipe, proxy IPs, forged requests, JS bots, non-Chrome Origin);
+  #23-#27 documented limits.
 - **Pre-ship blockers:** live Pardot/HubSpot iframe test (#8); Gravity Forms
   untested (#15).
-- **Open limits:** stale nonce under page caching (#2, Phase 6); report
-  performance on large sites (#10); CF7 6.2+ needs PHP 8.3 (#6).
+- **Open limits:** report performance on large sites (#10); CF7 6.2+ needs
+  PHP 8.3 (#6).
 - Phase 7 (hosted) stays parked.
 
 ## How to resume in a code tool

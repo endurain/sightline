@@ -105,6 +105,43 @@ visiting", not "went to a competitor".
 
 Settings (iframe attribution, demo data) are under **Vantage > Settings**.
 
+## Accuracy and known limits
+
+Attribution is only useful if you know where it can be wrong. What Vantage
+handles, and what it can't:
+
+- **Caching plugins and CDNs:** supported. Capture doesn't depend on the page
+  being freshly generated. If your optimizer has a "delay JavaScript until user
+  interaction" setting, Vantage's script is tagged to be left out of it; if
+  visitors who leave quickly seem to be missing, add `capture.js` to that
+  setting's exclusions by hand.
+- **Google Ads without UTMs:** auto-tagged clicks (`gclid`) count as
+  `google / cpc`; Microsoft Ads (`msclkid`) as `bing / cpc`. Facebook adds
+  `fbclid` to organic and paid clicks alike, so those show as `facebook / social`:
+  tag your Meta ads with UTMs to see them as paid.
+- **(direct) traffic** includes visits whose source the browser hid: links from
+  some apps and email clients, and visits from an HTTPS page to an HTTP site.
+  Tag the links you control (emails, social posts) with UTMs.
+- **Checkout and sign-in pages** (PayPal, Stripe, Google/Apple/Microsoft sign-in)
+  aren't counted as new sources when a visitor comes back from them. A developer
+  can add more (booking or checkout tools) with the `vantage_ignore_referrers`
+  filter.
+- **Bots and link previews** aren't counted: Slack, iMessage, WhatsApp and
+  Facebook previews never run Vantage's script, and known crawlers, SEO tools and
+  automated browsers are filtered. A bot built to look exactly like a person
+  can still get through.
+- **Safari** limits cookies created by scripts to 7 days; Vantage's visitor id is
+  set by your own server, so the same visitor keeps the same id for up to a year.
+- **One browser, not one person:** a visitor is tied to one browser until they
+  submit a form; journeys on two devices merge when the same email is used on
+  both.
+- **Timezone:** every date range is whole days in your site's timezone, shown at
+  the top of the dashboard. Set it (Settings > General) to the same timezone as
+  your GA4 property and CRM so daily numbers line up.
+- **Fake data:** Vantage only accepts touches that come from your own site's pages,
+  in a sane shape and volume. Like every client-side analytics tool, it can't
+  fully stop someone who deliberately scripts fake visits.
+
 ## Privacy
 
 - Email addresses are never stored. Only a one-way fingerprint is kept.

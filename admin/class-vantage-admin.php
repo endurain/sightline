@@ -62,6 +62,8 @@ class Vantage_Admin {
 				'nonce'       => wp_create_nonce( 'wp_rest' ),
 				'today'       => wp_date( 'Y-m-d' ),
 				'timezone'    => wp_timezone_string(),
+				'tzNamed'     => '' !== (string) get_option( 'timezone_string' ),
+				'tzUrl'       => esc_url_raw( admin_url( 'options-general.php#timezone_string' ) ),
 				'settingsUrl' => esc_url_raw( admin_url( 'admin.php?page=vantage-settings' ) ),
 			)
 		);

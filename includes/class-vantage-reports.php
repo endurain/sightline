@@ -31,18 +31,64 @@ class Vantage_Reports {
 	const NOT_CONVERTED = 'No conversion';
 	const MAX_RANGE_DAYS = 731;
 
-	/** Click id => [source, medium] when a click id arrives without UTMs. */
+	/**
+	 * Click id => [source, medium] for a click id that arrives without UTMs
+	 * (risk #3: Google Ads auto-tagging sends gclid, not UTMs). Each medium is
+	 * what the id actually proves. gclid / wbraid / gbraid / dclid / msclkid
+	 * and the other ad-platform ids only exist on paid clicks. fbclid is the
+	 * exception: Facebook appends it to organic post clicks too, so it proves
+	 * "came from Facebook", not "paid".
+	 */
 	private static $click_map = array(
-		'gclid'     => 'google',
-		'wbraid'    => 'google',
-		'gbraid'    => 'google',
-		'msclkid'   => 'bing',
-		'fbclid'    => 'facebook',
-		'ttclid'    => 'tiktok',
-		'li_fat_id' => 'linkedin',
-		'twclid'    => 'twitter',
-		'epik'      => 'pinterest',
-		'sccid'     => 'snapchat',
+		'gclid'     => array( 'google', 'cpc' ),
+		'wbraid'    => array( 'google', 'cpc' ),
+		'gbraid'    => array( 'google', 'cpc' ),
+		'dclid'     => array( 'google', 'display' ),
+		'msclkid'   => array( 'bing', 'cpc' ),
+		'fbclid'    => array( 'facebook', 'social' ),
+		'ttclid'    => array( 'tiktok', 'cpc' ),
+		'li_fat_id' => array( 'linkedin', 'cpc' ),
+		'twclid'    => array( 'twitter', 'cpc' ),
+		'epik'      => array( 'pinterest', 'cpc' ),
+		'sccid'     => array( 'snapchat', 'cpc' ),
+	);
+
+	/**
+	 * Android app referrers (android-app://<package>/), matched exactly and
+	 * before anything else: "com.google.android.gm" is Gmail, not Google search.
+	 */
+	private static $app_referrers = array(
+		'com.google.android.gm'                   => array( 'gmail', 'email' ),
+		'com.microsoft.office.outlook'            => array( 'outlook', 'email' ),
+		'com.yahoo.mobile.client.android.mail'    => array( 'yahoo mail', 'email' ),
+		'com.google.android.googlequicksearchbox' => array( 'google', 'organic' ),
+		'com.google.android.youtube'              => array( 'youtube', 'social' ),
+		'com.facebook.katana'                     => array( 'facebook', 'social' ),
+		'com.instagram.android'                   => array( 'instagram', 'social' ),
+		'com.linkedin.android'                    => array( 'linkedin', 'social' ),
+		'com.twitter.android'                     => array( 'twitter', 'social' ),
+		'com.reddit.frontpage'                    => array( 'reddit', 'social' ),
+		'com.pinterest'                           => array( 'pinterest', 'social' ),
+	);
+
+	/** Webmail hosts: a click from these is email, whatever the brand. */
+	private static $email_hosts = array(
+		'mail.google.com'       => 'gmail',
+		'mail.yahoo.com'        => 'yahoo mail',
+		'outlook.live.com'      => 'outlook',
+		'outlook.office.com'    => 'outlook',
+		'outlook.office365.com' => 'outlook',
+		'mail.proton.me'        => 'proton mail',
+		'mail.aol.com'          => 'aol mail',
+		'mail.zoho.com'         => 'zoho mail',
+		'mail.yandex.com'       => 'yandex mail',
+	);
+
+	/** Subdomains of search brands that are NOT search (docs.google.com, ...). */
+	private static $non_search_subdomains = array(
+		'mail', 'docs', 'drive', 'sites', 'groups', 'accounts', 'calendar', 'meet', 'chat',
+		'classroom', 'play', 'photos', 'keep', 'forms', 'translate', 'support', 'developers',
+		'cloud', 'ads', 'analytics', 'business', 'myaccount', 'outlook', 'login', 'answers',
 	);
 
 	private static $search_hosts = array(
@@ -351,17 +397,30 @@ class Vantage_Reports {
 		$medium   = null;
 		$campaign = ( isset( $t['utm_campaign'] ) && '' !== $t['utm_campaign'] ) ? $t['utm_campaign'] : null;
 
-		if ( ! empty( $t['utm_source'] ) || ! empty( $t['utm_medium'] ) ) {
-			$source = ! empty( $t['utm_source'] ) ? strtolower( $t['utm_source'] ) : '(not set)';
-			$medium = ! empty( $t['utm_medium'] ) ? strtolower( $t['utm_medium'] ) : '(not set)';
-		} elseif ( ! empty( $t['click_ids'] ) && ( $ids = json_decode( $t['click_ids'], true ) ) && is_array( $ids ) ) { // phpcs:ignore
-			foreach ( self::$click_map as $k => $src ) {
-				if ( isset( $ids[ $k ] ) ) {
-					$source = $src;
-					$medium = '(click id)';
+		$click = null; // [source, medium] proven by a click id, if any.
+		if ( ! empty( $t['click_ids'] ) && ( $ids = json_decode( $t['click_ids'], true ) ) && is_array( $ids ) ) { // phpcs:ignore
+			foreach ( self::$click_map as $k => $sm ) {
+				if ( isset( $ids[ $k ] ) && '' !== (string) $ids[ $k ] ) {
+					$click = $sm;
 					break;
 				}
 			}
+		}
+
+		if ( ! empty( $t['utm_source'] ) || ! empty( $t['utm_medium'] ) ) {
+			// UTMs win. A missing medium is filled from a click id only when the
+			// click id is from the same source (utm_source=google + gclid).
+			$source = ! empty( $t['utm_source'] ) ? strtolower( $t['utm_source'] ) : '(not set)';
+			$medium = ! empty( $t['utm_medium'] ) ? strtolower( $t['utm_medium'] ) : '(not set)';
+			if ( '(not set)' === $medium && $click && $click[0] === $source ) {
+				$medium = $click[1];
+			}
+			if ( '(not set)' === $source && $click ) {
+				$source = $click[0];
+			}
+		} elseif ( $click ) {
+			$source = $click[0];
+			$medium = $click[1];
 		}
 
 		if ( null === $source && ! empty( $t['referrer'] ) ) {
@@ -398,9 +457,21 @@ class Vantage_Reports {
 		if ( $host === $own ) {
 			return array( null, null ); // Internal navigation counts as direct.
 		}
-		foreach ( self::$search_hosts as $needle => $name ) {
-			if ( self::host_has( $host, $needle ) ) {
-				return array( $name, 'organic' );
+		if ( isset( self::$app_referrers[ $host ] ) ) {
+			return self::$app_referrers[ $host ];
+		}
+		foreach ( self::$email_hosts as $mail_host => $name ) {
+			if ( $host === $mail_host || substr( $host, -strlen( '.' . $mail_host ) ) === '.' . $mail_host ) {
+				return array( $name, 'email' );
+			}
+		}
+		$first_label = explode( '.', $host )[0];
+		$is_app      = 0 === strpos( $host, 'com.' ) || 0 === strpos( $host, 'org.' );
+		if ( ! $is_app && ! in_array( $first_label, self::$non_search_subdomains, true ) ) {
+			foreach ( self::$search_hosts as $needle => $name ) {
+				if ( self::host_has( $host, $needle ) ) {
+					return array( $name, 'organic' );
+				}
 			}
 		}
 		foreach ( self::$social_hosts as $needle => $name ) {

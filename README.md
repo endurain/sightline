@@ -5,7 +5,7 @@ touches, stores them first-party, ties repeat visits to a hashed identity (email
 is hashed with a server-side pepper, then discarded), and will visualize the path
 to conversion.
 
-**Status: v0.7.1, Phases 0–5 built.** Capture, REST ingestion, form integration
+**Status: v0.8.0, Phases 0–5 built, plus Tier 1 hardening (cache-safe ingestion, Safari-safe visitor id, click-id channels, bot filtering, timezone, ingestion checks).** Capture, REST ingestion, form integration
 with identity resolution (Contact Form 7 and WPForms verified; Gravity Forms
 wired but not yet verified), iframe form attribution
 for Pardot/HubSpot embeds, and the reporting API (attribution, Sankey data,

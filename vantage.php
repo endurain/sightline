@@ -3,7 +3,7 @@
  * Plugin Name:       Vantage
  * Plugin URI:        https://getcompario.com/vantage
  * Description:       Privacy-first multi-touch attribution. Captures UTM/ad-click touches, stores them first-party, and visualizes the path to conversion. (Phase 5: admin dashboard.)
- * Version:           0.7.1
+ * Version:           0.8.0
  * Requires at least: 6.0
  * Requires PHP:      7.4
  * Author:            Zac Sanders
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'VANTAGE_VERSION', '0.7.1' );
+define( 'VANTAGE_VERSION', '0.8.0' );
 define( 'VANTAGE_DB_VERSION', '1' );
 define( 'VANTAGE_FILE', __FILE__ );
 define( 'VANTAGE_DIR', plugin_dir_path( __FILE__ ) );
@@ -32,6 +32,7 @@ require_once VANTAGE_DIR . 'includes/class-vantage-capture.php';
 require_once VANTAGE_DIR . 'includes/interface-vantage-sink.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-db-sink.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-sinks.php';
+require_once VANTAGE_DIR . 'includes/class-vantage-bots.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-rest.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-forms.php';
 require_once VANTAGE_DIR . 'includes/class-vantage-iframe.php';

@@ -102,9 +102,17 @@ hashed email is written to that visitor row, merging their history. Phase 3.
 
 - No WordPress references in `capture.js` or `iframe-attribution.js` (code only;
   the explanatory header comment in `capture.js` mentions WordPress by name).
-- Config comes in via `window.VantageConfig` (endpoint, nonce, debug), injected
-  with `wp_localize_script`. Defaults make it run with no config at all.
-- Transport is a no-op when `cfg.endpoint` is absent.
+- Config comes in via `window.VantageConfig` (endpoint, debug, iframe,
+  extraIgnoreReferrers), injected with `wp_localize_script` and filterable with
+  `vantage_capture_config`. Defaults make it run with no config at all.
+- **Nothing per-visitor in the page** (no nonce): pages are served from
+  full-page caches. Never add one back.
+- Transport is a no-op when `cfg.endpoint` is absent. The POST pins
+  `referrerPolicy: 'same-origin'` so the endpoint's Origin check always works.
+- What records a touch: a campaign hit (UTMs or click id), the first-ever visit,
+  and a return visit with an external referrer (not in `ignoreReferrers`).
+- Skips `navigator.webdriver` browsers; prerendered pages wait for
+  `prerenderingchange`.
 
 ## File map
 
@@ -119,7 +127,9 @@ includes/
   interface-vantage-sink.php        Vantage_Sink
   class-vantage-db-sink.php         local-DB sink (+ dedupe)
   class-vantage-sinks.php           sink resolver (filter)
-  class-vantage-rest.php            /collect endpoint
+  class-vantage-rest.php            /collect endpoint: origin check, validation,
+                                      caps, server-set vt_anon cookie (no nonce)
+  class-vantage-bots.php            bot / preview / prefetch detection
   class-vantage-forms.php           form hooks + identity resolution
   class-vantage-iframe.php          iframe deferral (output buffer) + settings helpers
   class-vantage-reports.php         report computations (Phase 4)

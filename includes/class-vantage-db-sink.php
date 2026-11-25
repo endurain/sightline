@@ -180,7 +180,7 @@ class Vantage_DB_Sink implements Vantage_Sink {
 
 		$last = $wpdb->get_row(
 			$wpdb->prepare(
-				"SELECT utm_source, utm_medium, utm_campaign, utm_term, utm_content, click_ids, touch_time
+				"SELECT utm_source, utm_medium, utm_campaign, utm_term, utm_content, click_ids, referrer, touch_time
 				 FROM `$touches_t` WHERE visitor_id = %d ORDER BY touch_time DESC, id DESC LIMIT 1", // phpcs:ignore WordPress.DB
 				$visitor_id
 			),
@@ -197,6 +197,12 @@ class Vantage_DB_Sink implements Vantage_Sink {
 			&& $last['utm_content'] === $t['utm_content']
 			&& (string) $last['click_ids'] === (string) $t['click_ids'];
 
+		// Without UTMs or click ids the referring site IS the source: a return
+		// from Google search right after a direct visit is a new touch.
+		if ( $same && null === $t['utm_source'] && null === $t['utm_medium'] && null === $t['click_ids'] ) {
+			$same = self::ref_host( $last['referrer'] ) === self::ref_host( $t['referrer'] );
+		}
+
 		if ( ! $same ) {
 			return false;
 		}
@@ -207,5 +213,14 @@ class Vantage_DB_Sink implements Vantage_Sink {
 			return true; // identical and unparseable time: treat as dupe.
 		}
 		return ( $this_ts - $last_ts ) < ( self::DEDUPE_MINUTES * MINUTE_IN_SECONDS );
+	}
+
+	/**
+	 * @param string|null $url Referrer.
+	 * @return string Lowercase host without www, or ''.
+	 */
+	private static function ref_host( $url ) {
+		$h = strtolower( (string) wp_parse_url( (string) $url, PHP_URL_HOST ) );
+		return preg_replace( '/^www\./', '', $h );
 	}
 }

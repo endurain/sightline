@@ -9,7 +9,10 @@
  * What it does (Phase 1):
  *   - ensures a first-party anonymous id cookie (vt_anon)
  *   - reads UTMs + ad click ids + referrer from the current URL
- *   - appends a "touch" to a first-party touch list (localStorage, cookie fallback)
+ *   - appends a "touch" to a first-party touch list (localStorage, cookie fallback):
+ *     every campaign hit (UTMs or an ad click id), the first-ever visit, and
+ *     every return visit from another site (organic search, social, referral)
+ *   - skips automated browsers, and waits for prerendered pages to be shown
  *   - preserves first touch (list is append-only) and dedupes refreshes
  *   - adds a hidden vt_anon_id field to every form (including forms added later)
  *   - fills any existing vt_first_* / vt_last_* CRM fields with attribution
@@ -21,8 +24,7 @@
 	'use strict';
 
 	var defaults = {
-		endpoint: null,            // host-injected; transport POSTs here
-		nonce: null,               // host-injected; sent as X-WP-Nonce
+		endpoint: null,            // host-injected; transport POSTs here (no nonce: cache-safe)
 		cookieName: 'vt_anon',     // anonymous visitor id
 		storageKey: 'vt_touches',  // touch list
 		sentKey: 'vt_sent',        // how many touches have been sent
@@ -30,12 +32,22 @@
 		dedupeMinutes: 30,         // identical touch within this window is ignored
 		debug: false,
 		clickIdKeys: [
-			'gclid', 'wbraid', 'gbraid', 'fbclid', 'msclkid',
+			'gclid', 'wbraid', 'gbraid', 'dclid', 'fbclid', 'msclkid',
 			'ttclid', 'li_fat_id', 'twclid', 'epik', 'sccid'
+		],
+		// Referrers that are a step inside the visit, not a new source: a
+		// return from a payment or sign-in page must not steal last-touch credit.
+		ignoreReferrers: [
+			'paypal.com', 'stripe.com', 'pay.google.com', 'accounts.google.com',
+			'appleid.apple.com', 'login.microsoftonline.com', 'login.live.com'
 		]
 	};
 
 	var cfg = merge(defaults, window.VantageConfig || {});
+	// Host-supplied additions extend (never replace) the built-in exclusions.
+	if (Object.prototype.toString.call(cfg.extraIgnoreReferrers) === '[object Array]') {
+		cfg.ignoreReferrers = cfg.ignoreReferrers.concat(cfg.extraIgnoreReferrers);
+	}
 
 	function merge(a, b) {
 		var out = {}, k;
@@ -161,13 +173,20 @@
 		if (!unsent.length) { return; }
 
 		var total = list.length;
+		// No X-WP-Nonce: a nonce baked into a cached page goes stale and makes
+		// WordPress reject the request before Vantage sees it.
 		var headers = { 'Content-Type': 'application/json' };
-		if (cfg.nonce) { headers['X-WP-Nonce'] = cfg.nonce; }
 
 		window.fetch(cfg.endpoint, {
 			method: 'POST',
 			headers: headers,
 			credentials: 'same-origin',
+			// The endpoint checks that requests come from this site. Under a
+			// page-wide Referrer-Policy: no-referrer the Fetch spec says Origin
+			// becomes "null" (Chrome still sends it; other browsers may not), so
+			// pin the policy for this same-origin request. Sends nothing to
+			// other sites.
+			referrerPolicy: 'same-origin',
 			keepalive: true,
 			body: JSON.stringify({ anon_id: anonId, touches: unsent })
 		}).then(function (res) {
@@ -183,13 +202,38 @@
 	}
 
 	function sameSource(a, b) {
-		return a && b &&
+		var same = a && b &&
 			a.utm_source === b.utm_source &&
 			a.utm_medium === b.utm_medium &&
 			a.utm_campaign === b.utm_campaign &&
 			a.utm_term === b.utm_term &&
 			a.utm_content === b.utm_content &&
 			JSON.stringify(a.click_ids) === JSON.stringify(b.click_ids);
+		// Without UTMs or click ids, the referring site is the source.
+		if (same && !a.utm_source && !a.utm_medium && !a.click_ids) {
+			same = refHost(a.referrer) === refHost(b.referrer);
+		}
+		return same;
+	}
+
+	/* ---- Referrers ---- */
+	function bareHost(h) { return String(h || '').toLowerCase().replace(/^www\./, ''); }
+	function refHost(url) {
+		if (!url) { return ''; }
+		var m = String(url).match(/^[a-z][a-z0-9+.-]*:\/\/([^\/?#:]+)/i);
+		return m ? bareHost(m[1]) : '';
+	}
+	function hostMatches(host, domain) {
+		return host === domain || host.slice(-(domain.length + 1)) === '.' + domain;
+	}
+	/** A referrer from another site that counts as a new source. */
+	function isExternalReferrer(url) {
+		var host = refHost(url);
+		if (!host || host === bareHost(window.location.hostname)) { return false; }
+		for (var i = 0; i < cfg.ignoreReferrers.length; i++) {
+			if (hostMatches(host, bareHost(cfg.ignoreReferrers[i]))) { return false; }
+		}
+		return true;
 	}
 
 	function isDuplicate(candidate, list) {
@@ -291,6 +335,10 @@
 		} else if (list.length === 0) {
 			// First ever visit with no params: capture the organic/direct entry.
 			shouldRecord = true;
+		} else if (isExternalReferrer(built.touch.referrer)) {
+			// A return visit from another site (search, social, referral) is a
+			// new touch. Direct returns and internal navigation are not.
+			shouldRecord = !isDuplicate(built.touch, list);
 		}
 
 		if (shouldRecord) {
@@ -335,9 +383,24 @@
 		} catch (e) {}
 	}
 
-	if (document.readyState === 'loading') {
-		document.addEventListener('DOMContentLoaded', record);
+	function start() {
+		// Automated browsers (headless scrapers, test rigs, some ad verifiers)
+		// announce themselves here. Not proof against a determined bot; the
+		// server also filters by user agent.
+		if (window.navigator && window.navigator.webdriver) { return; }
+		if (document.readyState === 'loading') {
+			document.addEventListener('DOMContentLoaded', record);
+		} else {
+			record();
+		}
+	}
+
+	// A prerendered page (Chrome speculation rules, search-result prerender)
+	// runs scripts before anyone sees it, and may never be opened. Wait until
+	// it is actually shown.
+	if (document.prerendering) {
+		document.addEventListener('prerenderingchange', start, { once: true });
 	} else {
-		record();
+		start();
 	}
 })(window, document);
