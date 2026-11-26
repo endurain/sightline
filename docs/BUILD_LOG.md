@@ -214,6 +214,13 @@ See `BUILD_PLAN.md` (repo root) for the full phase plan.
 | 25 | The referral exclusion list is a starting set; checkout, booking and SSO hosts differ per site | Documented: `vantage_ignore_referrers` filter |
 | 26 | Return visits from other sites were not captured before 0.8.0, so earlier data under-counts organic / social / referral touches; cannot be backfilled | Known, historic only |
 | 27 | Vantage can't detect a GA4 / CRM timezone mismatch; the dashboard names the site timezone and links to the setting | Documented |
+| 28 | **Security:** /collect stores a `vt_cap_*` transient per visitor id per day (and `vt_rl_*` per IP). Without a persistent object cache these are `wp_options` rows: rotating random ids adds thousands of rows a day (expired ones only purged daily), and the visitors table grows with every fake id. Cheap nuisance / DB-bloat attack, not a takeover | Open: count caps in one bounded store (e.g. a small table or a single per-day option keyed by hash bucket), or only cap ids that already exist |
+| 29 | **Security:** capture.js copies UTM values from the URL straight into the hidden `vt_first_*` / `vt_last_*` CRM fields. A crafted link can push HTML/script text into Pardot/HubSpot records (stored XSS there depends on how the CRM renders it) | Open: strip tags / control characters and cap length before `fillFields()`; same rule as the server's sanitize_text_field |
+| 30 | **Security:** the form handler (`Vantage_Forms::handle`) accepts any `vt_anon_id` up to 64 chars, while /collect requires a UUID v4. A crafted form post can create oddly shaped visitor rows | Open: reuse `Vantage_REST::UUID_RE`; quick fix |
+| 31 | **Privacy (register #19):** the option-stored pepper sits in the same DB as the hashes, so a stolen DB lets an attacker test guessed emails against them. "No email stored" is true; "anonymous" is not | Open: push sites to `VANTAGE_PEPPER` in wp-config (settings-page prompt, Phase 6); keep the "pseudonymous" wording |
+| 32 | **Privacy (register #20):** `landing_url`, `referrer` and `utm_*` are stored as received; people put emails and names in URLs, breaking the no-PII promise | Open: strip email-like values and known PII params on capture (client and server) |
+| 33 | **Privacy (register #21):** capture fires before any consent banner is answered | Open, Phase 6: consent-mode hook (wait for a consent signal / integrate CMPs) |
+| 34 | **Security:** no dedicated line-by-line security review has been done yet (the 2026-11-26 assessment was informed, not an audit). `/security-review` failed because `origin/HEAD` isn't set in this repo | Open, **pre-ship**: run `git remote set-head origin main`, then `/security-review` (or `/code-review` at high) from the plugin folder |
 
 ## Test environment
 
@@ -383,6 +390,11 @@ suites re-run green. Test rows tagged `vt_selftest`, removed after.
 - **Phase 5 is complete** (0.7.0) and **Tier 1 of the risk register** (0.8.0).
   **Next:** Phase 6 (privacy, settings, retention, deletion), or the register's
   quick wins (#17 UTM case-normalizing) and Tier 4 (#20 PII in URLs, #21 consent).
+- **Security / privacy (2026-11-26 assessment):** WP-side basics are solid
+  (capabilities + nonces on admin actions, prepared SQL, escaped output, XSS probe
+  inert). Open: #20 forged requests, #28 transient/DB bloat, #29 URL values into
+  CRM fields, #30 form-path id check, #31 pepper location, #32 PII in URLs,
+  #33 consent, #34 formal review before a paying client.
 - **Revisit list from Tier 1:** #16-#22 open (real-plugin and real-Safari checks,
   localStorage wipe, proxy IPs, forged requests, JS bots, non-Chrome Origin);
   #23-#27 documented limits.
